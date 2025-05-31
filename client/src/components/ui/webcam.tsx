@@ -70,6 +70,17 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
     }
   }, [onCapture]);
 
+  // Auto-capture for analysis every 10 seconds
+  useEffect(() => {
+    if (isStreaming && onCapture) {
+      const interval = setInterval(() => {
+        captureImage();
+      }, 10000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isStreaming, captureImage, onCapture]);
+
   // Start camera on mount
   useEffect(() => {
     startCamera();

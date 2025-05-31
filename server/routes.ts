@@ -107,6 +107,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Analyze image with Gemini AI
+  app.post("/api/analyze-image", async (req, res) => {
+    try {
+      const { imageData, sessionId } = req.body;
+      
+      if (!imageData) {
+        return res.status(400).json({ error: "Image data is required" });
+      }
+
+      // Analyze with Gemini
+      const analysis = await geminiService.analyzeEquipmentImage(imageData);
+      
+      // Log the analysis
+      if (sessionId) {
+        await storage.createAiAnalysisLog({
+          sessionId: parseInt(sessionId),
+          analysisType: "equipment_detection",
+          inputData: { imageSize: imageData.length },
+          response: analysis,
+          confidence: Math.round(analysis.confidence * 100)
+        });
+
+        // Update session with analysis results
+        await storage.updateRepairSession(parseInt(sessionId), {
+          equipmentId: analysis.equipmentId,
+          equipmentType: analysis.equipmentType,
+          issueDetected: analysis.issueDetected,
+          totalSteps: analysis.repairSteps.length,
+          status: "in_progress",
+          geminiAnalysis: analysis
+        });
+
+        // Create repair steps
+        for (const step of analysis.repairSteps) {
+          await storage.createRepairStep({
+            sessionId: parseInt(sessionId),
+            stepNumber: step.stepNumber,
+            title: step.title,
+            description: step.description,
+            instructions: step.instructions,
+            status: step.stepNumber === 1 ? "current" : "pending"
+          });
+        }
+      }
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Image analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze image" });
+    }
+  });
+
+  // Generate voice guidance for a step
+  app.post("/api/voice-guidance", async (req, res) => {
+    try {
+      const { stepDescription, sessionId } = req.body;
+      
+      if (!stepDescription) {
+        return res.status(400).json({ error: "Step description is required" });
+      }
+
+      const voiceGuidance = await geminiService.generateVoiceGuidance(stepDescription);
+      
+      // Log the voice guidance generation
+      if (sessionId) {
+        await storage.createAiAnalysisLog({
+          sessionId: parseInt(sessionId),
+          analysisType: "voice_guidance",
+          inputData: { stepDescription },
+          response: { voiceGuidance },
+          confidence: 95
+        });
+      }
+
+      res.json({ voiceGuidance });
+    } catch (error) {
+      console.error("Voice guidance error:", error);
+      res.status(500).json({ error: "Failed to generate voice guidance" });
+    }
+  });
+
+  // Analyze step completion
+  app.post("/api/analyze-step-completion", async (req, res) => {
+    try {
+      const { imageData, expectedStep, sessionId } = req.body;
+      
+      if (!imageData || !expectedStep) {
+        return res.status(400).json({ error: "Image data and expected step are required" });
+      }
+
+      const completionAnalysis = await geminiService.analyzeStepCompletion(imageData, expectedStep);
+      
+      // Log the completion analysis
+      if (sessionId) {
+        await storage.createAiAnalysisLog({
+          sessionId: parseInt(sessionId),
+          analysisType: "step_completion",
+          inputData: { expectedStep, imageSize: imageData.length },
+          response: completionAnalysis,
+          confidence: Math.round(completionAnalysis.confidence * 100)
+        });
+      }
+
+      res.json(completionAnalysis);
+    } catch (error) {
+      console.error("Step completion analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze step completion" });
+    }
+  });
+
+  // Upload and store video captures
+  app.post("/api/upload-video", upload.single('video'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No video file provided" });
+      }
+
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        return res.status(400).json({ error: "Session ID is required" });
+      }
+
+      const videoCapture = await storage.createVideoCapture({
+        sessionId: parseInt(sessionId),
+        fileName: req.file.originalname,
+        filePath: req.file.path,
+        fileSize: req.file.size
+      });
+
+      res.json(videoCapture);
+    } catch (error) {
+      console.error("Video upload error:", error);
+      res.status(500).json({ error: "Failed to upload video" });
+    }
+  });
+
+  // Get AI analysis logs for a session
+  app.get("/api/analysis-logs/:sessionId", async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const logs = await storage.getAiAnalysisLogs(sessionId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get analysis logs" });
+    }
+  });
+
+  // Get video captures for a session
+  app.get("/api/video-captures/:sessionId", async (req, res) => {
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const captures = await storage.getVideoCaptures(sessionId);
+      res.json(captures);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get video captures" });
+    }
+  });
+
+  // Serve uploaded files
+  app.get("/api/uploads/:filename", (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(uploadsDir, filename);
+    
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).json({ error: "File not found" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -5,7 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { WebcamCapture } from "@/components/ui/webcam";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
-import { mockEquipmentData, mockRepairSteps } from "@/lib/mock-data";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Video, 
   Mic, 
@@ -23,7 +25,8 @@ import {
   Wifi,
   OctagonMinus,
   HelpCircle,
-  FileText
+  FileText,
+  Loader2
 } from "lucide-react";
 
 interface DetectedEquipment {
@@ -46,18 +49,131 @@ interface RepairStep {
 
 export default function SmartFixDashboard() {
   const [sessionTime, setSessionTime] = useState(0);
-  const [currentStep, setCurrentStep] = useState(2);
+  const [currentStep, setCurrentStep] = useState(1);
   const [sessionActive, setSessionActive] = useState(true);
   const [micActive, setMicActive] = useState(true);
   const [cameraActive, setCameraActive] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedEquipment, setDetectedEquipment] = useState<DetectedEquipment | null>(null);
-  const [repairSteps, setRepairSteps] = useState<RepairStep[]>(mockRepairSteps);
+  const [repairSteps, setRepairSteps] = useState<RepairStep[]>([]);
   const [aiMessage, setAiMessage] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const sessionStartTime = useRef(Date.now());
   
   const { speak, speaking, supported } = useSpeechSynthesis();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Create a new repair session on component mount
+  const createSessionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/repair-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          technicianName: "Alex Rodriguez",
+          status: "analyzing"
+        })
+      });
+      if (!response.ok) throw new Error("Failed to create session");
+      return response.json();
+    },
+    onSuccess: (session) => {
+      setSessionId(session.id);
+    },
+    onError: (error) => {
+      toast({
+        title: "Session Error",
+        description: "Failed to create repair session",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Analyze image with Gemini AI
+  const analyzeImageMutation = useMutation({
+    mutationFn: async (imageData: string) => {
+      const response = await fetch("/api/analyze-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageData,
+          sessionId
+        })
+      });
+      if (!response.ok) throw new Error("Failed to analyze image");
+      return response.json();
+    },
+    onSuccess: (analysis) => {
+      setDetectedEquipment({
+        id: analysis.equipmentId,
+        name: analysis.equipmentName,
+        model: analysis.model,
+        issue: analysis.issueDetected,
+        confidence: analysis.confidence,
+        position: analysis.position || { x: 33, y: 33, width: 48, height: 32 }
+      });
+      
+      setRepairSteps(analysis.repairSteps.map((step: any) => ({
+        id: step.stepNumber,
+        title: step.title,
+        description: step.description,
+        instructions: step.instructions,
+        status: step.stepNumber === 1 ? "current" : "pending"
+      })));
+      
+      setIsAnalyzing(false);
+      setAiMessage(`${analysis.equipmentName} ${analysis.model} identified. ${analysis.issueDetected}`);
+      setIsSpeaking(true);
+      
+      if (supported) {
+        speak(`${analysis.equipmentName} ${analysis.model} identified. ${analysis.issueDetected}`);
+      }
+      
+      setTimeout(() => setIsSpeaking(false), 5000);
+    },
+    onError: (error) => {
+      setIsAnalyzing(false);
+      toast({
+        title: "Analysis Error",
+        description: "Failed to analyze equipment. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Generate voice guidance
+  const voiceGuidanceMutation = useMutation({
+    mutationFn: async (stepDescription: string) => {
+      const response = await fetch("/api/voice-guidance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stepDescription,
+          sessionId
+        })
+      });
+      if (!response.ok) throw new Error("Failed to generate voice guidance");
+      return response.json();
+    },
+    onSuccess: (result) => {
+      const guidance = result.voiceGuidance;
+      setAiMessage(guidance);
+      setIsSpeaking(true);
+      
+      if (supported) {
+        speak(guidance);
+      }
+      
+      setTimeout(() => setIsSpeaking(false), 3000);
+    }
+  });
+
+  // Initialize session on mount
+  useEffect(() => {
+    createSessionMutation.mutate();
+  }, []);
 
   // Format session time
   const formatTime = (seconds: number) => {
@@ -77,27 +193,20 @@ export default function SmartFixDashboard() {
     }
   }, [sessionActive]);
 
-  // Simulate equipment detection
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsAnalyzing(true);
-      
-      setTimeout(() => {
-        setDetectedEquipment(mockEquipmentData);
-        setIsAnalyzing(false);
-        setAiMessage("Hydraulic regulator HX-300 identified. Pressure valve appears misaligned. This is a common fault after 500 hours of operation.");
-        setIsSpeaking(true);
-        
-        if (supported) {
-          speak("Hydraulic regulator HX-300 identified. Pressure valve appears misaligned. This is a common fault after 500 hours of operation.");
-        }
-        
-        setTimeout(() => setIsSpeaking(false), 5000);
-      }, 2000);
-    }, 3000);
+  // Handle image capture and analysis
+  const handleImageCapture = (imageSrc: string) => {
+    if (!sessionId) {
+      toast({
+        title: "Session Not Ready",
+        description: "Please wait for session initialization",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, [speak, supported]);
+    setIsAnalyzing(true);
+    analyzeImageMutation.mutate(imageSrc);
+  };
 
   const handleStepComplete = (stepId: number) => {
     setRepairSteps(prev => prev.map(step => {
@@ -202,7 +311,7 @@ export default function SmartFixDashboard() {
         <div className="w-3/5 relative bg-black border-r border-[hsl(var(--neon-blue))]/20">
           <div className="relative h-full">
             <WebcamCapture 
-              onCapture={() => console.log("Image captured")}
+              onCapture={handleImageCapture}
               className="w-full h-full"
             />
             
@@ -243,8 +352,27 @@ export default function SmartFixDashboard() {
                 size="icon"
                 variant="outline"
                 className="bg-[hsl(var(--secondary-dark))]/80 border-[hsl(var(--neon-blue))]/50 text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                onClick={() => {
+                  const video = document.querySelector('video');
+                  const canvas = document.createElement('canvas');
+                  if (video && video.videoWidth && video.videoHeight) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const context = canvas.getContext('2d');
+                    if (context) {
+                      context.drawImage(video, 0, 0);
+                      const imageSrc = canvas.toDataURL('image/jpeg', 0.8);
+                      handleImageCapture(imageSrc);
+                    }
+                  }
+                }}
+                disabled={isAnalyzing || analyzeImageMutation.isPending}
               >
-                <Camera className="h-4 w-4" />
+                {isAnalyzing || analyzeImageMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
               </Button>
               <Button
                 size="icon"
