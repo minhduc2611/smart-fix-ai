@@ -48,6 +48,8 @@ interface RepairStep {
   subInstructions?: string[];
 }
 
+const BASE_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "";
+
 export default function SmartFixDashboard() {
   const [sessionTime, setSessionTime] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
@@ -82,7 +84,7 @@ export default function SmartFixDashboard() {
   // Create a new repair session on component mount
   const createSessionMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/repair-sessions", {
+      const response = await fetch(`${BASE_URL}/api/repair-sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -108,7 +110,7 @@ export default function SmartFixDashboard() {
   // Analyze image with Gemini AI
   const analyzeImageMutation = useMutation({
     mutationFn: async (imageData: string) => {
-      const response = await fetch("/api/analyze-image", {
+      const response = await fetch(`${BASE_URL}/api/analyze-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -160,7 +162,7 @@ export default function SmartFixDashboard() {
   // Real-time conversational analysis with Gemini
   const conversationalAnalysisMutation = useMutation({
     mutationFn: async ({ imageData, spokenInput }: { imageData: string; spokenInput: string }) => {
-      const response = await fetch("/api/conversational-analysis", {
+      const response = await fetch(`${BASE_URL}/api/conversational-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -220,7 +222,7 @@ export default function SmartFixDashboard() {
   // Generate voice guidance
   const voiceGuidanceMutation = useMutation({
     mutationFn: async (stepDescription: string) => {
-      const response = await fetch("/api/voice-guidance", {
+      const response = await fetch(`${BASE_URL}/api/voice-guidance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
