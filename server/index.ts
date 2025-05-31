@@ -71,6 +71,7 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = 5000;
   
+  /*
   server.listen(
     {
       port,
@@ -80,5 +81,9 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
     },
-  ); 
+  ); */
+
+  server.listen(port, () => {
+    log(`serving on port ${port}`);
+  }); 
 })();
