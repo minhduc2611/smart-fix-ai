@@ -1,0 +1,10 @@
+
+
+###
+POST http://localhost:6000/api/repair-sessions
+Content-Type: application/json
+
+{
+  "technicianName": "Alex Rodriguez",
+  "status": "analyzing"
+}
