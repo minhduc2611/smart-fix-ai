@@ -336,6 +336,10 @@ export default function SmartFixDashboard() {
     //     setAiMessage(randomResponse);
     //     setIsSpeaking(true);
 
+    //     if (supported) {
+    //       speak(randomResponse);
+    //     }
+
     //     // Add mock equipment detection
     //     setDetectedEquipment({
     //       id: "DEMO_" + Date.now(),

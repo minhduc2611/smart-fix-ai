@@ -36,6 +36,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event handler for offline support
 self.addEventListener('fetch', (event) => {
+  // Skip cache operations for unsupported schemes
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
