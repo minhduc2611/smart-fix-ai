@@ -295,10 +295,55 @@ export default function SmartFixDashboard() {
     if (!sessionId) return;
     
     setIsAnalyzing(true);
-    conversationalAnalysisMutation.mutate({ 
-      imageData, 
-      spokenInput: spokenText 
-    });
+    
+    if (demoMode) {
+      // Immediate demo response for testing
+      setTimeout(() => {
+        const responses = [
+          `I heard you say "${spokenText}". I can see equipment in the camera view. Let me analyze what needs attention.`,
+          `Based on what you said "${spokenText}", I'm examining the equipment. I can identify potential maintenance points.`,
+          `You mentioned "${spokenText}". I'm analyzing the visual data and can provide specific guidance for this equipment.`,
+          `I understand "${spokenText}". Looking at the equipment, I can help you with troubleshooting steps.`
+        ];
+        
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        setAiMessage(randomResponse);
+        setIsSpeaking(true);
+        
+        if (supported) {
+          speak(randomResponse);
+        }
+        
+        // Add mock equipment detection
+        setDetectedEquipment({
+          id: "DEMO_" + Date.now(),
+          name: "Industrial Equipment",
+          model: "Smart Device",
+          issue: "Requires inspection based on your input",
+          confidence: 0.85,
+          position: { x: 30, y: 30, width: 40, height: 40 }
+        });
+        
+        setRepairSteps([
+          {
+            id: 1,
+            title: "Initial Assessment",
+            description: "Examine the equipment based on your voice input",
+            instructions: `Responding to: "${spokenText}" - Check the equipment for any visible issues`,
+            status: "current"
+          }
+        ]);
+        
+        setTimeout(() => setIsSpeaking(false), 4000);
+        setIsAnalyzing(false);
+      }, 1500);
+    } else {
+      // Real Gemini analysis
+      conversationalAnalysisMutation.mutate({ 
+        imageData, 
+        spokenInput: spokenText 
+      });
+    }
   };
 
   // Toggle conversation mode
