@@ -49,7 +49,7 @@ interface RepairStep {
 }
 
 const BASE_URL =
-  process.env.NODE_ENV === "development" ? "http://localhost:3001" : "";
+  process.env.NODE_ENV === "development" ? "http://localhost:5000" : "";
 
 export default function SmartFixDashboard() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -495,119 +495,123 @@ export default function SmartFixDashboard() {
   const progress = (completedSteps / repairSteps.length) * 100;
   console.log("progress", progress);
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-[hsl(var(--primary-dark))] to-[hsl(var(--secondary-dark))]">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <header className="glass-card p-4 flex items-center justify-between border-b border-[hsl(var(--neon-blue))]/20">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-[hsl(var(--neon-blue))] rounded-lg flex items-center justify-center">
-            <Brain className="text-black text-lg" />
+      <header className="backdrop-blur-md bg-slate-900/90 border-b border-blue-500/20 p-3 sm:p-4 sticky top-0 z-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-lg flex items-center justify-center shadow-lg shadow-blue-400/30">
+              <Brain className="text-slate-900 text-sm sm:text-lg" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold text-blue-400 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                SmartFix AI
+              </h1>
+              <p className="text-xs text-slate-400 hidden sm:block">Real-time Field Support</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-[hsl(var(--neon-blue))] animate-glow">
-              SmartFix AI
-            </h1>
-            <p className="text-xs text-gray-400">Real-time Field Support</p>
-          </div>
-        </div>
 
-        <div className="flex items-center space-x-4">
-          {/* Connection Status */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-[hsl(var(--success-green))] rounded-full animate-pulse-neon"></div>
-              <span className="text-xs text-[hsl(var(--success-green))] font-mono">
-                LIVE
-              </span>
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Connection Status */}
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-xs text-green-400 font-mono hidden sm:inline">
+                  LIVE
+                </span>
+              </div>
+
+              {/* Conversation Mode Toggle */}
+              <Button
+                size="sm"
+                variant={conversationActive ? "default" : "outline"}
+                className={`
+                  text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 h-8 sm:h-9
+                  ${
+                    conversationActive
+                      ? "bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30"
+                      : "border-blue-400 text-blue-400 hover:bg-blue-500 hover:text-white"
+                  }
+                `}
+                onClick={toggleConversationMode}
+                disabled={!speechRecognitionSupported}
+              >
+                {conversationActive ? (
+                  <>
+                    <MicOff className="mr-1 h-3 w-3" />
+                    <span className="hidden sm:inline">END</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="mr-1 h-3 w-3" />
+                    <span className="hidden sm:inline">CHAT</span>
+                  </>
+                )}
+              </Button>
             </div>
 
-            {/* Conversation Mode Toggle */}
+            {/* Emergency Button */}
             <Button
+              variant="outline"
               size="sm"
-              variant={conversationActive ? "default" : "outline"}
-              className={`
-                ${
-                  conversationActive
-                    ? "bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]"
-                    : "border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
-                }
-              `}
-              onClick={toggleConversationMode}
-              disabled={!speechRecognitionSupported}
+              className="bg-red-500/20 border-red-400 text-red-400 hover:bg-red-500 hover:text-white text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 h-8 sm:h-9"
+              onClick={handleEmergencyContact}
             >
-              {conversationActive ? (
-                <>
-                  <MicOff className="mr-2 h-3 w-3" />
-                  END CHAT
-                </>
-              ) : (
-                <>
-                  <Mic className="mr-2 h-3 w-3" />
-                  START CHAT
-                </>
-              )}
+              <Phone className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">EMERGENCY</span>
             </Button>
           </div>
-
-          {/* Emergency Button */}
-          <Button
-            variant="outline"
-            className="bg-[hsl(var(--warning-orange))]/20 border-[hsl(var(--warning-orange))] text-[hsl(var(--warning-orange))] hover:bg-[hsl(var(--warning-orange))] hover:text-white"
-            onClick={handleEmergencyContact}
-          >
-            <Phone className="mr-2 h-4 w-4" />
-            EMERGENCY
-          </Button>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex flex-col lg:flex-row landscape:flex-row overflow-x-auto">
         {/* Video Feed Section */}
-        <div className="w-3/5 relative bg-black border-r border-[hsl(var(--neon-blue))]/20">
-          <div className="relative h-full">
+        <div className="w-full lg:w-3/5 landscape:w-3/5 relative bg-black order-1 lg:order-1 landscape:order-1 border-b lg:border-b-0 lg:border-r landscape:border-b-0 landscape:border-r border-blue-500/20 h-[50vh] lg:h-full landscape:h-full flex-shrink-0">
+          <div className="relative h-full w-full">
             <WebcamCapture
               onCapture={handleImageCapture}
-              className="w-full h-full"
+              className="w-full h-full object-cover"
             />
 
             {/* Scanner Line Effect */}
             {isAnalyzing && (
-              <div className="absolute top-0 left-0 w-full h-1 scanner-line"></div>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-pulse"></div>
             )}
 
             {/* Equipment Detection Overlay */}
             {detectedEquipment && (
               <div className="absolute inset-0">
-                <div className="absolute top-1/3 left-1/3 w-48 h-32 equipment-overlay rounded-lg animate-pulse">
-                  <div className="absolute -top-8 left-0 bg-[hsl(var(--success-green))] text-black px-2 py-1 rounded text-xs font-bold">
+                <div className="absolute top-1/3 left-1/3 w-32 sm:w-48 h-24 sm:h-32 border-2 border-green-400 rounded-lg animate-pulse shadow-lg shadow-green-400/30">
+                  <div className="absolute -top-8 left-0 bg-green-400 text-black px-2 py-1 rounded text-xs font-bold">
                     {detectedEquipment.name}
                   </div>
                 </div>
 
                 {/* Issue Indicator */}
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div className="w-6 h-6 bg-[hsl(var(--warning-orange))] rounded-full animate-ping"></div>
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-[hsl(var(--warning-orange))] rounded-full"></div>
+                  <div className="w-6 h-6 bg-orange-400 rounded-full animate-ping"></div>
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-orange-400 rounded-full"></div>
                 </div>
 
                 {/* Measurement Overlay */}
-                <div className="absolute bottom-4 left-4 glass-card p-2 rounded-lg">
-                  <div className="text-xs text-[hsl(var(--neon-blue))] font-mono space-y-1">
+                <div className="absolute bottom-4 left-4 backdrop-blur-md bg-slate-900/80 p-2 rounded-lg border border-blue-500/30">
+                  <div className="text-xs text-blue-400 font-mono space-y-1">
                     <div>
                       PRESSURE:{" "}
-                      <span className="text-[hsl(var(--warning-orange))]">
+                      <span className="text-orange-400">
                         142 PSI
                       </span>
                     </div>
                     <div>
                       TEMP:{" "}
-                      <span className="text-[hsl(var(--success-green))]">
+                      <span className="text-green-400">
                         68°F
                       </span>
                     </div>
                     <div>
                       STATUS:{" "}
-                      <span className="text-[hsl(var(--warning-orange))]">
+                      <span className="text-orange-400">
                         MISALIGNED
                       </span>
                     </div>
@@ -621,7 +625,7 @@ export default function SmartFixDashboard() {
               <Button
                 size="icon"
                 variant="outline"
-                className="bg-[hsl(var(--secondary-dark))]/80 border-[hsl(var(--neon-blue))]/50 text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                className="bg-slate-900/80 backdrop-blur-md border-blue-500/50 text-blue-400 hover:bg-blue-500 hover:text-white shadow-lg w-10 h-10"
                 onClick={() => {
                   const video = document.querySelector("video");
                   const canvas = document.createElement("canvas");
@@ -647,7 +651,7 @@ export default function SmartFixDashboard() {
               <Button
                 size="icon"
                 variant="outline"
-                className="bg-[hsl(var(--secondary-dark))]/80 border-[hsl(var(--neon-blue))]/50 text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                className="bg-slate-900/80 backdrop-blur-md border-blue-500/50 text-blue-400 hover:bg-blue-500 hover:text-white shadow-lg w-10 h-10"
               >
                 <Maximize className="h-4 w-4" />
               </Button>
@@ -656,64 +660,52 @@ export default function SmartFixDashboard() {
         </div>
 
         {/* Instructions Panel */}
-        <div className="w-2/5 flex flex-col bg-[hsl(var(--secondary-dark))]">
-          {/* AI Analysis Header */}
-          <div className="p-4 border-b border-[hsl(var(--neon-blue))]/20">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="w-8 h-8 bg-[hsl(var(--neon-blue))] rounded-full flex items-center justify-center animate-pulse-neon">
-                <Brain className="text-black text-sm" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[hsl(var(--neon-blue))]">
-                  AI Analysis
-                </h3>
-                <p className="text-xs text-gray-400">Gemini Live Processing</p>
-              </div>
-            </div>
-
-            {/* Analysis Results */}
-            {detectedEquipment && (
-              <Card className="glass-card border-[hsl(var(--neon-blue))]/20 animate-slide-up">
-                <CardContent className="p-3">
-                  <div className="text-sm space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Check className="h-4 w-4 text-[hsl(var(--success-green))]" />
-                      <span className="text-[hsl(var(--success-green))] font-semibold">
-                        Equipment Identified
-                      </span>
-                    </div>
-                    <p className="text-gray-300">
-                      {detectedEquipment.name} {detectedEquipment.model}
-                    </p>
-                    <p className="text-[hsl(var(--warning-orange))] text-sm flex items-center">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      {detectedEquipment.issue}
-                    </p>
+        <div className="w-full lg:w-2/5 landscape:w-2/5 flex flex-col bg-slate-800 order-2 lg:order-2 landscape:order-2 flex-shrink-0">
+          {/* Analysis Results */}
+          {detectedEquipment && (
+            <Card className="backdrop-blur-md bg-slate-900/50 border-blue-500/20 shadow-lg m-3">
+              <CardContent className="p-3">
+                <div className="text-sm space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Check className="h-4 w-4 text-green-400" />
+                    <span className="text-green-400 font-semibold">
+                      Equipment Identified
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                  <p className="text-slate-300">
+                    {detectedEquipment.name} {detectedEquipment.model}
+                  </p>
+                  <p className="text-orange-400 text-sm flex items-center">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    {detectedEquipment.issue}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Voice Assistant */}
-          <div className="p-4 border-b border-[hsl(var(--neon-blue))]/20">
+          <div className="p-3 sm:p-4 border-b border-blue-500/20">
             <div className="flex items-center space-x-3 mb-3">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  conversationActive
-                    ? "bg-[hsl(var(--neon-blue))] animate-pulse-neon"
-                    : "bg-[hsl(var(--electric-blue))]"
-                }`}
+                className={`
+                  w-8 h-8 rounded-full flex items-center justify-center shadow-lg
+                  ${
+                    conversationActive
+                      ? "bg-gradient-to-r from-blue-400 to-cyan-400 animate-pulse shadow-blue-400/30"
+                      : "bg-slate-600"
+                  }
+                `}
               >
                 {conversationActive ? (
-                  <Mic className="text-black text-sm" />
+                  <Mic className="text-slate-900 text-sm" />
                 ) : (
                   <MicOff className="text-white text-sm" />
                 )}
               </div>
               <div>
-                <span className="font-semibold">Gemini AI Assistant</span>
-                <p className="text-xs text-gray-400">
+                <span className="font-semibold text-slate-200 text-sm sm:text-base">Gemini AI Assistant</span>
+                <p className="text-xs text-slate-400">
                   {conversationActive ? "Listening & Watching" : "Manual Mode"}
                 </p>
               </div>
@@ -723,16 +715,16 @@ export default function SmartFixDashboard() {
             {conversationActive && (
               <div className="mb-3">
                 <div className="flex items-center space-x-2 mb-2">
-                  <div className="w-2 h-2 bg-[hsl(var(--neon-blue))] rounded-full animate-pulse"></div>
-                  <span className="text-xs text-[hsl(var(--neon-blue))]">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-400">
                     LISTENING
                   </span>
                 </div>
                 {transcript && (
-                  <Card className="glass-card border-[hsl(var(--neon-blue))]/20 mb-2">
+                  <Card className="backdrop-blur-md bg-slate-900/50 border-blue-500/20 mb-2">
                     <CardContent className="p-2">
-                      <p className="text-xs text-gray-400">You said:</p>
-                      <p className="text-sm text-[hsl(var(--neon-blue))]">
+                      <p className="text-xs text-slate-400">You said:</p>
+                      <p className="text-sm text-blue-400">
                         "{transcript}"
                       </p>
                     </CardContent>
@@ -747,14 +739,14 @@ export default function SmartFixDashboard() {
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
-                    className="voice-wave w-1 rounded"
+                    className="bg-blue-400 w-1 rounded animate-pulse"
                     style={{
                       height: `${16 + Math.random() * 16}px`,
                       animationDelay: `${i * 0.1}s`,
                     }}
                   />
                 ))}
-                <span className="text-sm text-gray-400 ml-2">
+                <span className="text-sm text-slate-400 ml-2">
                   AI Speaking...
                 </span>
               </div>
@@ -762,10 +754,10 @@ export default function SmartFixDashboard() {
 
             {/* AI Response */}
             {aiMessage && (
-              <Card className="glass-card border-[hsl(var(--neon-blue))]/20 mb-3">
+              <Card className="backdrop-blur-md bg-slate-900/50 border-blue-500/20 mb-3">
                 <CardContent className="p-3">
-                  <p className="text-xs text-gray-400 mb-1">Gemini AI:</p>
-                  <p className="text-sm text-gray-300">"{aiMessage}"</p>
+                  <p className="text-xs text-slate-400 mb-1">Gemini AI:</p>
+                  <p className="text-sm text-slate-300">"{aiMessage}"</p>
                 </CardContent>
               </Card>
             )}
@@ -775,7 +767,7 @@ export default function SmartFixDashboard() {
               {conversationActive ? (
                 <Button
                   size="sm"
-                  className="flex-1 bg-[hsl(var(--warning-orange))] text-white hover:bg-[hsl(var(--warning-orange))]/80"
+                  className="flex-1 bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/30"
                   onClick={toggleConversationMode}
                 >
                   <MicOff className="mr-2 h-3 w-3" />
@@ -785,7 +777,7 @@ export default function SmartFixDashboard() {
                 <>
                   <Button
                     size="sm"
-                    className="flex-1 bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]"
+                    className="flex-1 bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30"
                     onClick={() => handleVoiceCommand("repeat")}
                   >
                     <Play className="mr-2 h-3 w-3" />
@@ -794,12 +786,12 @@ export default function SmartFixDashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="flex-1 border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                    className="flex-1 border-blue-400 text-blue-400 hover:bg-blue-500 hover:text-white"
                     onClick={toggleConversationMode}
                     disabled={!speechRecognitionSupported}
                   >
                     <Mic className="mr-2 h-3 w-3" />
-                    Start Chat
+                    <span className="hidden sm:inline">Start </span>Chat
                   </Button>
                 </>
               )}
@@ -807,7 +799,7 @@ export default function SmartFixDashboard() {
 
             {/* Conversation Status */}
             {conversationActive && (
-              <div className="mt-2 text-xs text-center text-gray-400">
+              <div className="mt-2 text-xs text-center text-slate-400">
                 Say something while looking at equipment for real-time AI
                 analysis
               </div>
@@ -815,8 +807,8 @@ export default function SmartFixDashboard() {
           </div>
 
           {/* Step-by-Step Instructions */}
-          <div className="flex-1 p-4 overflow-y-auto">
-            <h3 className="font-semibold mb-4 text-[hsl(var(--neon-blue))]">
+          <div className="flex-1 p-3 sm:p-4 overflow-y-auto">
+            <h3 className="font-semibold mb-4 text-blue-400 text-sm sm:text-base">
               Repair Instructions
             </h3>
 
@@ -825,49 +817,49 @@ export default function SmartFixDashboard() {
                 <Card
                   key={step.id}
                   className={`
-                    glass-card border-l-4 transition-all duration-300
+                    backdrop-blur-md bg-slate-900/50 border-l-4 transition-all duration-300 shadow-lg
                     ${
                       step.status === "completed"
-                        ? "border-l-[hsl(var(--success-green))] opacity-75"
+                        ? "border-l-green-400 opacity-75"
                         : ""
                     }
                     ${
                       step.status === "current"
-                        ? "border-l-[hsl(var(--neon-blue))] neon-border animate-pulse-neon"
+                        ? "border-l-blue-400 border border-blue-400/30 shadow-blue-400/20"
                         : ""
                     }
                     ${
                       step.status === "pending"
-                        ? "border-l-gray-600 opacity-60"
+                        ? "border-l-slate-600 opacity-60"
                         : ""
                     }
                   `}
                 >
-                  <CardContent className="p-4">
+                  <CardContent className="p-3 sm:p-4">
                     <div className="flex items-center space-x-3 mb-2">
                       <div
                         className={`
-                        w-6 h-6 rounded-full flex items-center justify-center
+                        w-6 h-6 rounded-full flex items-center justify-center shadow-lg
                         ${
                           step.status === "completed"
-                            ? "bg-[hsl(var(--success-green))]"
+                            ? "bg-green-400 shadow-green-400/30"
                             : ""
                         }
                         ${
                           step.status === "current"
-                            ? "bg-[hsl(var(--neon-blue))] animate-pulse"
+                            ? "bg-blue-400 animate-pulse shadow-blue-400/30"
                             : ""
                         }
-                        ${step.status === "pending" ? "bg-gray-600" : ""}
+                        ${step.status === "pending" ? "bg-slate-600" : ""}
                       `}
                       >
                         {step.status === "completed" ? (
-                          <Check className="text-black text-xs" />
+                          <Check className="text-slate-900 text-xs" />
                         ) : (
                           <span
                             className={`font-bold text-xs ${
                               step.status === "current"
-                                ? "text-black"
+                                ? "text-slate-900"
                                 : "text-white"
                             }`}
                           >
@@ -877,18 +869,18 @@ export default function SmartFixDashboard() {
                       </div>
                       <span
                         className={`
-                        font-semibold
+                        font-semibold text-sm
                         ${
                           step.status === "completed"
-                            ? "text-[hsl(var(--success-green))]"
+                            ? "text-green-400"
                             : ""
                         }
                         ${
                           step.status === "current"
-                            ? "text-[hsl(var(--neon-blue))]"
+                            ? "text-blue-400"
                             : ""
                         }
-                        ${step.status === "pending" ? "text-gray-400" : ""}
+                        ${step.status === "pending" ? "text-slate-400" : ""}
                       `}
                       >
                         Step {step.id}
@@ -899,17 +891,17 @@ export default function SmartFixDashboard() {
                         text-xs
                         ${
                           step.status === "completed"
-                            ? "border-[hsl(var(--success-green))] text-[hsl(var(--success-green))]"
+                            ? "border-green-400 text-green-400"
                             : ""
                         }
                         ${
                           step.status === "current"
-                            ? "border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))]"
+                            ? "border-blue-400 text-blue-400"
                             : ""
                         }
                         ${
                           step.status === "pending"
-                            ? "border-gray-500 text-gray-500"
+                            ? "border-slate-500 text-slate-500"
                             : ""
                         }
                       `}
@@ -924,7 +916,7 @@ export default function SmartFixDashboard() {
                       ${
                         step.status === "current"
                           ? "text-white font-semibold"
-                          : "text-gray-300"
+                          : "text-slate-300"
                       }
                     `}
                     >
@@ -932,7 +924,7 @@ export default function SmartFixDashboard() {
                     </p>
 
                     {step.status === "current" && step.subInstructions && (
-                      <div className="text-xs text-gray-400 space-y-1 mb-3">
+                      <div className="text-xs text-slate-400 space-y-1 mb-3">
                         {step.subInstructions.map((instruction, index) => (
                           <div key={index}>• {instruction}</div>
                         ))}
@@ -940,16 +932,16 @@ export default function SmartFixDashboard() {
                     )}
 
                     {step.status === "completed" && (
-                      <div className="text-xs text-[hsl(var(--success-green))]">
+                      <div className="text-xs text-green-400">
                         ✓ Confirmed by technician
                       </div>
                     )}
 
                     {step.status === "current" && (
-                      <div className="flex space-x-2">
+                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                         <Button
                           size="sm"
-                          className="bg-[hsl(var(--success-green))] text-black hover:bg-green-400"
+                          className="bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-500/30"
                           onClick={() => handleStepComplete(step.id)}
                         >
                           Done
@@ -957,7 +949,7 @@ export default function SmartFixDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-gray-600 text-gray-300 hover:border-[hsl(var(--neon-blue))] hover:text-[hsl(var(--neon-blue))]"
+                          className="border-slate-600 text-slate-300 hover:border-blue-400 hover:text-blue-400"
                           onClick={() => handleVoiceCommand("help")}
                         >
                           <HelpCircle className="mr-1 h-3 w-3" />
@@ -966,7 +958,7 @@ export default function SmartFixDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-gray-600 text-gray-300 hover:border-[hsl(var(--neon-blue))] hover:text-[hsl(var(--neon-blue))]"
+                          className="border-slate-600 text-slate-300 hover:border-blue-400 hover:text-blue-400"
                         >
                           <FileText className="mr-1 h-3 w-3" />
                           Diagram
@@ -980,26 +972,26 @@ export default function SmartFixDashboard() {
           </div>
 
           {/* Session Info */}
-          <div className="p-4 border-t border-[hsl(var(--neon-blue))]/20 bg-[hsl(var(--secondary-dark))]/50">
+          <div className="p-3 sm:p-4 border-t border-blue-500/20 bg-slate-800/50">
             <div className="flex items-center justify-between text-xs">
               <div className="space-y-1">
-                <div className="text-gray-400">
+                <div className="text-slate-400">
                   <SessionTimer />
                 </div>
-                <div className="text-gray-400">
+                <div className="text-slate-400">
                   Technician: <span className="text-white">Alex Rodriguez</span>
                 </div>
               </div>
               <div className="space-y-1 text-right">
-                <div className="text-gray-400">
+                <div className="text-slate-400">
                   Equipment ID:{" "}
                   <span className="text-white font-mono">
                     {detectedEquipment?.id || "HX300-2847"}
                   </span>
                 </div>
-                <div className="text-gray-400">
+                <div className="text-slate-400">
                   Progress:{" "}
-                  <span className="text-[hsl(var(--success-green))]">
+                  <span className="text-green-400">
                     {completedSteps}/{repairSteps.length} Steps
                   </span>
                 </div>
@@ -1012,12 +1004,12 @@ export default function SmartFixDashboard() {
       </div>
 
       {/* Bottom Controls */}
-      <div className="glass-card p-4 border-t border-[hsl(var(--neon-blue))]/20">
-        <div className="flex items-center justify-between">
+      <div className="backdrop-blur-md bg-slate-900/90 p-3 sm:p-4 border-t border-blue-500/20">
+        <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
           {/* Left Controls */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto">
             <Button
-              className="bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]"
+              className="bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30 flex-1 sm:flex-none"
               onClick={handleSaveSession}
             >
               <Save className="mr-2 h-4 w-4" />
@@ -1026,24 +1018,24 @@ export default function SmartFixDashboard() {
 
             <Button
               variant="outline"
-              className="border-gray-600 text-gray-300 hover:border-[hsl(var(--neon-blue))] hover:text-[hsl(var(--neon-blue))]"
+              className="border-slate-600 text-slate-300 hover:border-blue-400 hover:text-blue-400 flex-1 sm:flex-none"
             >
               <History className="mr-2 h-4 w-4" />
-              View History
+              <span className="hidden sm:inline">View </span>History
             </Button>
           </div>
 
           {/* Center Status */}
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4 sm:space-x-6 w-full sm:w-auto justify-center">
             <div className="flex items-center space-x-2">
               <Video
                 className={`h-4 w-4 ${
                   cameraActive
-                    ? "text-[hsl(var(--success-green))]"
-                    : "text-gray-500"
+                    ? "text-green-400"
+                    : "text-slate-500"
                 }`}
               />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-slate-400 hidden sm:inline">
                 Video {cameraActive ? "Active" : "Inactive"}
               </span>
             </div>
@@ -1051,25 +1043,25 @@ export default function SmartFixDashboard() {
               <Mic
                 className={`h-4 w-4 ${
                   micActive
-                    ? "text-[hsl(var(--success-green))]"
-                    : "text-gray-500"
+                    ? "text-green-400"
+                    : "text-slate-500"
                 }`}
               />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-slate-400 hidden sm:inline">
                 Audio {micActive ? "Active" : "Inactive"}
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              <Wifi className="h-4 w-4 text-[hsl(var(--success-green))]" />
-              <span className="text-xs text-gray-400">Connected</span>
+              <Wifi className="h-4 w-4 text-green-400" />
+              <span className="text-xs text-slate-400 hidden sm:inline">Connected</span>
             </div>
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto">
             <Button
               variant="outline"
-              className="border-gray-600 text-gray-300 hover:border-[hsl(var(--warning-orange))] hover:text-[hsl(var(--warning-orange))]"
+              className="border-slate-600 text-slate-300 hover:border-orange-400 hover:text-orange-400 flex-1 sm:flex-none"
               onClick={() => setSessionActive(!sessionActive)}
             >
               {sessionActive ? (
@@ -1077,16 +1069,16 @@ export default function SmartFixDashboard() {
               ) : (
                 <Play className="mr-2 h-4 w-4" />
               )}
-              {sessionActive ? "Pause" : "Resume"} Session
+              {sessionActive ? "Pause" : "Resume"}
             </Button>
 
             <Button
               variant="outline"
-              className="bg-[hsl(var(--warning-orange))]/20 border-[hsl(var(--warning-orange))] text-[hsl(var(--warning-orange))] hover:bg-[hsl(var(--warning-orange))] hover:text-white"
+              className="bg-red-500/20 border-red-400 text-red-400 hover:bg-red-500 hover:text-white flex-1 sm:flex-none"
               onClick={() => setSessionActive(false)}
             >
               <OctagonMinus className="mr-2 h-4 w-4" />
-              End Session
+              End
             </Button>
           </div>
         </div>
@@ -1116,7 +1108,7 @@ const SessionTimer = () => {
   return (
     <>
       Session Time:{" "}
-      <span className="text-[hsl(var(--neon-blue))] font-mono">
+      <span className="text-blue-400 font-mono">
         {formatTime(sessionTime)}
       </span>
     </>
