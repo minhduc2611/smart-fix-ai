@@ -315,7 +315,11 @@ export default function SmartFixDashboard() {
     spokenText: string
   ) => {
     if (!sessionId) return;
-    console.log("😄😄😄😄😄😄handleConversationalAnalysis", imageData, spokenText);
+    console.log(
+      "😄😄😄😄😄😄handleConversationalAnalysis",
+      imageData,
+      spokenText
+    );
     setIsAnalyzing(true);
     conversationalAnalysisMutation.mutate({
       imageData,
@@ -500,7 +504,7 @@ export default function SmartFixDashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <header className="backdrop-blur-md bg-slate-900/90 border-b border-blue-500/20 p-3 sm:p-4 sticky top-0 z-50">
+      <header className="backdrop-blur-md bg-slate-900/90 border-b border-blue-500/20 p-2 sticky top-0 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 sm:space-x-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-lg flex items-center justify-center shadow-lg shadow-blue-400/30">
@@ -510,7 +514,9 @@ export default function SmartFixDashboard() {
               <h1 className="text-lg sm:text-xl font-bold text-blue-400 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
                 SmartFix AI
               </h1>
-              <p className="text-xs text-slate-400 hidden sm:block">Real-time Field Support</p>
+              <p className="text-xs text-slate-400 hidden sm:block">
+                Real-time Field Support
+              </p>
             </div>
           </div>
 
@@ -601,22 +607,14 @@ export default function SmartFixDashboard() {
                 <div className="absolute bottom-4 left-4 backdrop-blur-md bg-slate-900/80 p-2 rounded-lg border border-blue-500/30">
                   <div className="text-xs text-blue-400 font-mono space-y-1">
                     <div>
-                      PRESSURE:{" "}
-                      <span className="text-orange-400">
-                        142 PSI
-                      </span>
+                      PRESSURE: <span className="text-orange-400">142 PSI</span>
                     </div>
                     <div>
-                      TEMP:{" "}
-                      <span className="text-green-400">
-                        68°F
-                      </span>
+                      TEMP: <span className="text-green-400">68°F</span>
                     </div>
                     <div>
                       STATUS:{" "}
-                      <span className="text-orange-400">
-                        MISALIGNED
-                      </span>
+                      <span className="text-orange-400">MISALIGNED</span>
                     </div>
                   </div>
                 </div>
@@ -707,7 +705,9 @@ export default function SmartFixDashboard() {
                 )}
               </div>
               <div>
-                <span className="font-semibold text-slate-200 text-sm sm:text-base">Gemini AI Assistant</span>
+                <span className="font-semibold text-slate-200 text-sm sm:text-base">
+                  Gemini AI Assistant
+                </span>
                 <p className="text-xs text-slate-400">
                   {conversationActive ? "Listening & Watching" : "Manual Mode"}
                 </p>
@@ -719,17 +719,13 @@ export default function SmartFixDashboard() {
               <div className="mb-3">
                 <div className="flex items-center space-x-2 mb-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-blue-400">
-                    LISTENING
-                  </span>
+                  <span className="text-xs text-blue-400">LISTENING</span>
                 </div>
                 {transcript && (
                   <Card className="backdrop-blur-md bg-slate-900/50 border-blue-500/20 mb-2">
                     <CardContent className="p-2">
                       <p className="text-xs text-slate-400">You said:</p>
-                      <p className="text-sm text-blue-400">
-                        "{transcript}"
-                      </p>
+                      <p className="text-sm text-blue-400">"{transcript}"</p>
                     </CardContent>
                   </Card>
                 )}
@@ -810,12 +806,12 @@ export default function SmartFixDashboard() {
           </div>
 
           {/* Step-by-Step Instructions */}
-          <div className="flex-1 p-3 sm:p-4 overflow-y-auto">
-            <h3 className="font-semibold mb-4 text-blue-400 text-sm sm:text-base">
-              Repair Instructions
-            </h3>
+          <div className="p-3 sm:p-4 h-[150px] lg:h-auto overflow-y-scroll">
+            <div className="space-y-3  ">
+              <h3 className="font-semibold mb-4 text-blue-400 text-sm sm:text-base">
+                Repair Instructions
+              </h3>
 
-            <div className="space-y-3">
               {repairSteps.map((step) => (
                 <Card
                   key={step.id}
@@ -873,16 +869,8 @@ export default function SmartFixDashboard() {
                       <span
                         className={`
                         font-semibold text-sm
-                        ${
-                          step.status === "completed"
-                            ? "text-green-400"
-                            : ""
-                        }
-                        ${
-                          step.status === "current"
-                            ? "text-blue-400"
-                            : ""
-                        }
+                        ${step.status === "completed" ? "text-green-400" : ""}
+                        ${step.status === "current" ? "text-blue-400" : ""}
                         ${step.status === "pending" ? "text-slate-400" : ""}
                       `}
                       >
@@ -975,7 +963,7 @@ export default function SmartFixDashboard() {
           </div>
 
           {/* Session Info */}
-          <div className="p-3 sm:p-4 border-t border-blue-500/20 bg-slate-800/50">
+          <div className="p-2 lg:p-4 border-t border-blue-500/20 bg-slate-800/50">
             <div className="flex items-center justify-between text-xs">
               <div className="space-y-1">
                 <div className="text-slate-400">
@@ -1007,7 +995,7 @@ export default function SmartFixDashboard() {
       </div>
 
       {/* Bottom Controls */}
-      <div className="backdrop-blur-md bg-slate-900/90 p-3 sm:p-4 border-t border-blue-500/20">
+      <div className="backdrop-blur-md bg-slate-900/90 p-2 border-t border-blue-500/20">
         <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
           {/* Left Controls */}
           <div className="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto">
@@ -1034,9 +1022,7 @@ export default function SmartFixDashboard() {
             <div className="flex items-center space-x-2">
               <Video
                 className={`h-4 w-4 ${
-                  cameraActive
-                    ? "text-green-400"
-                    : "text-slate-500"
+                  cameraActive ? "text-green-400" : "text-slate-500"
                 }`}
               />
               <span className="text-xs text-slate-400 hidden sm:inline">
@@ -1046,9 +1032,7 @@ export default function SmartFixDashboard() {
             <div className="flex items-center space-x-2">
               <Mic
                 className={`h-4 w-4 ${
-                  micActive
-                    ? "text-green-400"
-                    : "text-slate-500"
+                  micActive ? "text-green-400" : "text-slate-500"
                 }`}
               />
               <span className="text-xs text-slate-400 hidden sm:inline">
@@ -1057,7 +1041,9 @@ export default function SmartFixDashboard() {
             </div>
             <div className="flex items-center space-x-2">
               <Wifi className="h-4 w-4 text-green-400" />
-              <span className="text-xs text-slate-400 hidden sm:inline">Connected</span>
+              <span className="text-xs text-slate-400 hidden sm:inline">
+                Connected
+              </span>
             </div>
           </div>
 
@@ -1115,9 +1101,7 @@ const SessionTimer = () => {
   return (
     <>
       Session Time:{" "}
-      <span className="text-blue-400 font-mono">
-        {formatTime(sessionTime)}
-      </span>
+      <span className="text-blue-400 font-mono">{formatTime(sessionTime)}</span>
     </>
   );
 };
