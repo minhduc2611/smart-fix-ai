@@ -107,7 +107,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analyze image with Gemini AI
+  // Real-time conversational analysis with Gemini AI
+  app.post("/api/conversational-analysis", async (req, res) => {
+    try {
+      const { imageData, spokenInput, sessionId } = req.body;
+      
+      if (!imageData) {
+        return res.status(400).json({ error: "Image data is required" });
+      }
+
+      const spokenText = spokenInput || "What do you see in this equipment?";
+
+      // Analyze with Gemini using conversational approach
+      const analysis = await geminiService.conversationalAnalysis(imageData, spokenText);
+      
+      // Log the analysis
+      if (sessionId) {
+        await storage.createAiAnalysisLog({
+          sessionId: parseInt(sessionId),
+          analysisType: "conversational_analysis",
+          inputData: { spokenInput: spokenText, imageSize: imageData.length },
+          response: analysis,
+          confidence: Math.round(analysis.visualAnalysis.confidence * 100)
+        });
+
+        // Update session with analysis results
+        await storage.updateRepairSession(parseInt(sessionId), {
+          equipmentId: analysis.visualAnalysis.equipmentId,
+          equipmentType: analysis.visualAnalysis.equipmentType,
+          issueDetected: analysis.visualAnalysis.issueDetected,
+          totalSteps: analysis.visualAnalysis.repairSteps.length,
+          status: "in_progress",
+          geminiAnalysis: analysis.visualAnalysis
+        });
+
+        // Create repair steps
+        for (const step of analysis.visualAnalysis.repairSteps) {
+          await storage.createRepairStep({
+            sessionId: parseInt(sessionId),
+            stepNumber: step.stepNumber,
+            title: step.title,
+            description: step.description,
+            instructions: step.instructions,
+            status: step.stepNumber === 1 ? "current" : "pending"
+          });
+        }
+      }
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Conversational analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze with Gemini" });
+    }
+  });
+
+  // Analyze image with Gemini AI (legacy endpoint)
   app.post("/api/analyze-image", async (req, res) => {
     try {
       const { imageData, sessionId } = req.body;

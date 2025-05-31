@@ -35,6 +35,73 @@ export interface RepairStepSuggestion {
 export class GeminiAnalysisService {
   private model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
+  async conversationalAnalysis(imageBase64: string, spokenInput: string, sessionContext?: any): Promise<{
+    visualAnalysis: EquipmentAnalysis;
+    conversationalResponse: string;
+    voiceGuidance: string;
+  }> {
+    try {
+      const prompt = `
+        You are an expert field technician AI assistant with real-time vision and voice interaction capabilities.
+        
+        The technician just said: "${spokenInput}"
+        
+        Analyze the image and respond conversationally to their input while providing technical guidance.
+        
+        Provide a JSON response with:
+        {
+          "visualAnalysis": {
+            "equipmentId": "detected_id",
+            "equipmentType": "category", 
+            "equipmentName": "specific_name",
+            "model": "model_number",
+            "issueDetected": "what_you_see_wrong",
+            "confidence": 0.0-1.0,
+            "repairSteps": [
+              {
+                "stepNumber": 1,
+                "title": "step_title",
+                "description": "brief_description", 
+                "instructions": "detailed_instructions",
+                "estimatedTime": "time_estimate",
+                "requiredTools": ["tool1", "tool2"],
+                "safetyNotes": ["safety1", "safety2"]
+              }
+            ],
+            "position": { "x": 0.3, "y": 0.2, "width": 0.4, "height": 0.3 }
+          },
+          "conversationalResponse": "Direct response to what they said, like a helpful colleague",
+          "voiceGuidance": "Clear, spoken instructions for next steps"
+        }
+        
+        Be conversational, supportive, and technically accurate. Respond as if you're right there helping them.
+      `;
+
+      const result = await this.model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: imageBase64.replace(/^data:image\/[a-z]+;base64,/, ''),
+            mimeType: 'image/jpeg'
+          }
+        }
+      ]);
+
+      const response = await result.response;
+      const text = response.text();
+      
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in Gemini response');
+      }
+
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      console.error('Gemini conversational analysis error:', error);
+      throw new Error(`Failed to analyze: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   async analyzeEquipmentImage(imageBase64: string, sessionContext?: any): Promise<EquipmentAnalysis> {
     try {
       const prompt = `

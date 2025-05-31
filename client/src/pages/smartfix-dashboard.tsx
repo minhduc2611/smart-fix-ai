@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { WebcamCapture } from "@/components/ui/webcam";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -62,8 +63,20 @@ export default function SmartFixDashboard() {
   const sessionStartTime = useRef(Date.now());
   
   const { speak, speaking, supported } = useSpeechSynthesis();
+  const { 
+    isListening, 
+    transcript, 
+    startListening, 
+    stopListening, 
+    resetTranscript,
+    supported: speechRecognitionSupported 
+  } = useSpeechRecognition();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Real-time conversation state
+  const [conversationActive, setConversationActive] = useState(false);
+  const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null);
   
   // Create a new repair session on component mount
   const createSessionMutation = useMutation({
@@ -143,6 +156,66 @@ export default function SmartFixDashboard() {
     }
   });
 
+  // Real-time conversational analysis with Gemini
+  const conversationalAnalysisMutation = useMutation({
+    mutationFn: async ({ imageData, spokenInput }: { imageData: string; spokenInput: string }) => {
+      const response = await fetch("/api/conversational-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageData,
+          spokenInput,
+          sessionId
+        })
+      });
+      if (!response.ok) throw new Error("Failed to analyze with Gemini");
+      return response.json();
+    },
+    onSuccess: (result) => {
+      const { visualAnalysis, conversationalResponse, voiceGuidance } = result;
+      
+      // Update equipment detection
+      if (visualAnalysis.equipmentId) {
+        setDetectedEquipment({
+          id: visualAnalysis.equipmentId,
+          name: visualAnalysis.equipmentName,
+          model: visualAnalysis.model,
+          issue: visualAnalysis.issueDetected,
+          confidence: visualAnalysis.confidence,
+          position: visualAnalysis.position || { x: 33, y: 33, width: 48, height: 32 }
+        });
+        
+        setRepairSteps(visualAnalysis.repairSteps.map((step: any) => ({
+          id: step.stepNumber,
+          title: step.title,
+          description: step.description,
+          instructions: step.instructions,
+          status: step.stepNumber === 1 ? "current" : "pending"
+        })));
+      }
+      
+      // Speak the conversational response
+      const responseToSpeak = voiceGuidance || conversationalResponse;
+      setAiMessage(responseToSpeak);
+      setIsSpeaking(true);
+      
+      if (supported) {
+        speak(responseToSpeak);
+      }
+      
+      setTimeout(() => setIsSpeaking(false), 4000);
+      setIsAnalyzing(false);
+    },
+    onError: (error) => {
+      setIsAnalyzing(false);
+      toast({
+        title: "Analysis Error",
+        description: "Failed to communicate with AI assistant",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Generate voice guidance
   const voiceGuidanceMutation = useMutation({
     mutationFn: async (stepDescription: string) => {
@@ -193,20 +266,82 @@ export default function SmartFixDashboard() {
     }
   }, [sessionActive]);
 
-  // Handle image capture and analysis
+  // Handle image capture and store for conversation
   const handleImageCapture = (imageSrc: string) => {
-    if (!sessionId) {
-      toast({
-        title: "Session Not Ready",
-        description: "Please wait for session initialization",
-        variant: "destructive"
-      });
-      return;
+    setLastCapturedImage(imageSrc);
+    
+    if (conversationActive && transcript.trim()) {
+      // If in conversation mode and we have speech, analyze immediately
+      handleConversationalAnalysis(imageSrc, transcript.trim());
+      resetTranscript();
+    } else if (!conversationActive) {
+      // Traditional analysis mode
+      if (!sessionId) {
+        toast({
+          title: "Session Not Ready",
+          description: "Please wait for session initialization",
+          variant: "destructive"
+        });
+        return;
+      }
+      setIsAnalyzing(true);
+      analyzeImageMutation.mutate(imageSrc);
     }
-
-    setIsAnalyzing(true);
-    analyzeImageMutation.mutate(imageSrc);
   };
+
+  // Handle real-time conversational analysis
+  const handleConversationalAnalysis = (imageData: string, spokenText: string) => {
+    if (!sessionId) return;
+    
+    setIsAnalyzing(true);
+    conversationalAnalysisMutation.mutate({ 
+      imageData, 
+      spokenInput: spokenText 
+    });
+  };
+
+  // Toggle conversation mode
+  const toggleConversationMode = () => {
+    if (conversationActive) {
+      // Stop conversation
+      setConversationActive(false);
+      stopListening();
+      setAiMessage("Conversation mode disabled. Use camera button for manual analysis.");
+    } else {
+      // Start conversation
+      if (!speechRecognitionSupported) {
+        toast({
+          title: "Speech Recognition Not Available",
+          description: "Your browser doesn't support speech recognition",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setConversationActive(true);
+      startListening();
+      setAiMessage("Conversation mode active. I'm listening and watching. What can I help you with?");
+      
+      if (supported) {
+        speak("Conversation mode active. I'm listening and watching. What can I help you with?");
+      }
+    }
+  };
+
+  // Handle speech input when transcript changes
+  useEffect(() => {
+    if (conversationActive && transcript.trim() && lastCapturedImage) {
+      // Debounce speech input to avoid too many requests
+      const timer = setTimeout(() => {
+        if (transcript.trim().length > 10) { // Only process meaningful speech
+          handleConversationalAnalysis(lastCapturedImage, transcript.trim());
+          resetTranscript();
+        }
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [transcript, conversationActive, lastCapturedImage]);
 
   const handleStepComplete = (stepId: number) => {
     setRepairSteps(prev => prev.map(step => {
@@ -287,9 +422,37 @@ export default function SmartFixDashboard() {
         
         <div className="flex items-center space-x-4">
           {/* Connection Status */}
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-[hsl(var(--success-green))] rounded-full animate-pulse-neon"></div>
-            <span className="text-xs text-[hsl(var(--success-green))] font-mono">LIVE</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-[hsl(var(--success-green))] rounded-full animate-pulse-neon"></div>
+              <span className="text-xs text-[hsl(var(--success-green))] font-mono">LIVE</span>
+            </div>
+            
+            {/* Conversation Mode Toggle */}
+            <Button
+              size="sm"
+              variant={conversationActive ? "default" : "outline"}
+              className={`
+                ${conversationActive 
+                  ? "bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]" 
+                  : "border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                }
+              `}
+              onClick={toggleConversationMode}
+              disabled={!speechRecognitionSupported}
+            >
+              {conversationActive ? (
+                <>
+                  <MicOff className="mr-2 h-3 w-3" />
+                  END CHAT
+                </>
+              ) : (
+                <>
+                  <Mic className="mr-2 h-3 w-3" />
+                  START CHAT
+                </>
+              )}
+            </Button>
           </div>
           
           {/* Emergency Button */}
