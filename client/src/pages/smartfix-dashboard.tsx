@@ -586,11 +586,42 @@ export default function SmartFixDashboard() {
           {/* Voice Assistant */}
           <div className="p-4 border-b border-[hsl(var(--neon-blue))]/20">
             <div className="flex items-center space-x-3 mb-3">
-              <div className="w-8 h-8 bg-[hsl(var(--electric-blue))] rounded-full flex items-center justify-center">
-                {micActive ? <Mic className="text-white text-sm" /> : <MicOff className="text-white text-sm" />}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                conversationActive 
+                  ? "bg-[hsl(var(--neon-blue))] animate-pulse-neon" 
+                  : "bg-[hsl(var(--electric-blue))]"
+              }`}>
+                {conversationActive ? (
+                  <Mic className="text-black text-sm" />
+                ) : (
+                  <MicOff className="text-white text-sm" />
+                )}
               </div>
-              <span className="font-semibold">Voice Assistant</span>
+              <div>
+                <span className="font-semibold">Gemini AI Assistant</span>
+                <p className="text-xs text-gray-400">
+                  {conversationActive ? "Listening & Watching" : "Manual Mode"}
+                </p>
+              </div>
             </div>
+
+            {/* Live Speech Recognition */}
+            {conversationActive && (
+              <div className="mb-3">
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="w-2 h-2 bg-[hsl(var(--neon-blue))] rounded-full animate-pulse"></div>
+                  <span className="text-xs text-[hsl(var(--neon-blue))]">LISTENING</span>
+                </div>
+                {transcript && (
+                  <Card className="glass-card border-[hsl(var(--neon-blue))]/20 mb-2">
+                    <CardContent className="p-2">
+                      <p className="text-xs text-gray-400">You said:</p>
+                      <p className="text-sm text-[hsl(var(--neon-blue))]">"{transcript}"</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
             
             {/* Voice Visualizer */}
             {(isSpeaking || speaking) && (
@@ -609,10 +640,11 @@ export default function SmartFixDashboard() {
               </div>
             )}
             
-            {/* Current Speech */}
+            {/* AI Response */}
             {aiMessage && (
               <Card className="glass-card border-[hsl(var(--neon-blue))]/20 mb-3">
                 <CardContent className="p-3">
+                  <p className="text-xs text-gray-400 mb-1">Gemini AI:</p>
                   <p className="text-sm text-gray-300">"{aiMessage}"</p>
                 </CardContent>
               </Card>
@@ -620,24 +652,45 @@ export default function SmartFixDashboard() {
             
             {/* Voice Controls */}
             <div className="flex space-x-2">
-              <Button
-                size="sm"
-                className="flex-1 bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]"
-                onClick={() => handleVoiceCommand("repeat")}
-              >
-                <Play className="mr-2 h-3 w-3" />
-                Replay
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1 border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
-                onClick={() => setMicActive(!micActive)}
-              >
-                <Mic className="mr-2 h-3 w-3" />
-                Respond
-              </Button>
+              {conversationActive ? (
+                <Button
+                  size="sm"
+                  className="flex-1 bg-[hsl(var(--warning-orange))] text-white hover:bg-[hsl(var(--warning-orange))]/80"
+                  onClick={toggleConversationMode}
+                >
+                  <MicOff className="mr-2 h-3 w-3" />
+                  Stop Chat
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]"
+                    onClick={() => handleVoiceCommand("repeat")}
+                  >
+                    <Play className="mr-2 h-3 w-3" />
+                    Replay
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                    onClick={toggleConversationMode}
+                    disabled={!speechRecognitionSupported}
+                  >
+                    <Mic className="mr-2 h-3 w-3" />
+                    Start Chat
+                  </Button>
+                </>
+              )}
             </div>
+
+            {/* Conversation Status */}
+            {conversationActive && (
+              <div className="mt-2 text-xs text-center text-gray-400">
+                Say something while looking at equipment for real-time AI analysis
+              </div>
+            )}
           </div>
           
           {/* Step-by-Step Instructions */}
