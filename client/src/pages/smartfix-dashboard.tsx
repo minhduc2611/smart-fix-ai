@@ -27,6 +27,11 @@ import {
   Loader2,
   Download,
 } from "lucide-react"
+import { useMutation } from "@tanstack/react-query"
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition"
+import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis"
+import { useCamera } from "@/hooks/useCamera"
+import { useOrientation } from "@/hooks/useOrientation"
 
 // Inline TypeScript declarations
 declare global {
@@ -54,7 +59,29 @@ interface RepairStep {
   subInstructions?: string[]
 }
 
+interface AnalysisResponse {
+  equipmentId: string;
+  equipmentName: string;
+  model: string;
+  issueDetected: string;
+  confidence: number;
+  position?: { x: number; y: number; width: number; height: number };
+  repairSteps: Array<{
+    stepNumber: number;
+    title: string;
+    description: string;
+    instructions: string;
+  }>;
+}
+
+const BASE_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "";
+
 export default function SmartFixDashboard() {
+  const { toast } = useToast()
+  const { transcript, resetTranscript, startListening, stopListening, speechRecognitionSupported } = useSpeechRecognition()
+  const { speak, supported, speaking } = useSpeechSynthesis()
+  const { videoRef, error, handleImageCapture } = useCamera()
+  const { isLandscape } = useOrientation()
   const [sessionTime, setSessionTime] = useState(0)
   const [currentStep, setCurrentStep] = useState(1)
   const [sessionActive, setSessionActive] = useState(true)
@@ -69,202 +96,181 @@ export default function SmartFixDashboard() {
   const sessionStartTime = useRef(Date.now())
 
   // Real-time conversation state
-  const [conversationActive, setConversationActive] = useState(false)
-  const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null)
-  const [demoMode, setDemoMode] = useState(true)
-
-  // PWA installation state
+  const [conversationActive, setConversationActive] = useState(false);
+  const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(true); // Enable demo mode for immediate testing
+  
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [isInstallable, setIsInstallable] = useState(false)
 
-  // Speech synthesis state
-  const [speaking, setSpeaking] = useState(false)
-  const [supported, setSupported] = useState(false)
-
-  // Speech recognition state
-  const [isListening, setIsListening] = useState(false)
-  const [transcript, setTranscript] = useState("")
-  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false)
-  const recognitionRef = useRef<any>(null)
-
-  // Camera stream state
-  const [stream, setStream] = useState<MediaStream | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  // Orientation state for mobile landscape
-  const [isLandscape, setIsLandscape] = useState(false)
-
-  // Detect orientation changes
-  useEffect(() => {
-    const handleOrientationChange = () => {
-      const isLandscapeMode = window.innerHeight < window.innerWidth && window.innerWidth < 1024
-      setIsLandscape(isLandscapeMode)
-    }
-
-    handleOrientationChange()
-    window.addEventListener("resize", handleOrientationChange)
-    window.addEventListener("orientationchange", handleOrientationChange)
-
-    return () => {
-      window.removeEventListener("resize", handleOrientationChange)
-      window.removeEventListener("orientationchange", handleOrientationChange)
-    }
-  }, [])
-
-  const { toast } = useToast()
-
-  // Inline Speech Synthesis Hook Logic
-  useEffect(() => {
-    setSupported("speechSynthesis" in window)
-  }, [])
-
-  const speak = useCallback(
-    (text: string) => {
-      if (!supported) return
-
-      // Stop any ongoing speech
-      window.speechSynthesis.cancel()
-
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 0.9
-      utterance.pitch = 1
-      utterance.volume = 1
-
-      utterance.onstart = () => setSpeaking(true)
-      utterance.onend = () => setSpeaking(false)
-      utterance.onerror = () => setSpeaking(false)
-
-      window.speechSynthesis.speak(utterance)
+  // Create a new repair session on component mount
+  const createSessionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`${BASE_URL}/api/repair-sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          technicianName: "Alex Rodriguez",
+          status: "analyzing"
+        })
+      });
+      if (!response.ok) throw new Error("Failed to create session");
+      return response.json();
     },
-    [supported],
-  )
-
-  // Inline Speech Recognition Hook Logic
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    setSpeechRecognitionSupported(!!SpeechRecognition)
-
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition()
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = "en-US"
-
-      recognition.onresult = (event: any) => {
-        let finalTranscript = ""
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript
-          }
-        }
-        if (finalTranscript) {
-          setTranscript(finalTranscript)
-        }
-      }
-
-      recognition.onerror = (event: any) => {
-        console.error("Speech recognition error:", event.error)
-        setIsListening(false)
-      }
-
-      recognition.onend = () => {
-        setIsListening(false)
-      }
-
-      recognitionRef.current = recognition
+    onSuccess: (session: { id: number }) => {
+      setSessionId(session.id);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Session Error",
+        description: "Failed to create repair session",
+        variant: "destructive"
+      });
     }
-  }, [])
+  });
 
-  const startListening = useCallback(() => {
-    if (recognitionRef.current && speechRecognitionSupported) {
-      try {
-        recognitionRef.current.start()
-        setIsListening(true)
-      } catch (error) {
-        console.error("Error starting speech recognition:", error)
-      }
-    }
-  }, [speechRecognitionSupported])
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-    }
-  }, [])
-
-  const resetTranscript = useCallback(() => {
-    setTranscript("")
-  }, [])
-
-  // Inline WebcamCapture Logic
-  useEffect(() => {
-    const startCamera = async () => {
-      try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: "environment",
-          },
-          audio: false,
+  // Analyze image with Gemini AI
+  const analyzeImageMutation = useMutation({
+    mutationFn: async (imageData: string) => {
+      const response = await fetch(`${BASE_URL}/api/analyze-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageData,
+          sessionId
         })
-
-        setStream(mediaStream)
-        setCameraActive(true)
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream
-        }
-      } catch (err) {
-        console.error("Error accessing webcam:", err)
-        setError("Camera access denied or not available")
-        setCameraActive(false)
+      });
+      if (!response.ok) throw new Error("Failed to analyze image");
+      return response.json();
+    },
+    onSuccess: (analysis: AnalysisResponse) => {
+      setDetectedEquipment({
+        id: analysis.equipmentId,
+        name: analysis.equipmentName,
+        model: analysis.model,
+        issue: analysis.issueDetected,
+        confidence: analysis.confidence,
+        position: analysis.position || { x: 33, y: 33, width: 48, height: 32 }
+      });
+      
+      setRepairSteps(analysis.repairSteps.map((step) => ({
+        id: step.stepNumber,
+        title: step.title,
+        description: step.description,
+        instructions: step.instructions,
+        status: step.stepNumber === 1 ? "current" : "pending"
+      })));
+      
+      setIsAnalyzing(false);
+      setAiMessage(`${analysis.equipmentName} ${analysis.model} identified. ${analysis.issueDetected}`);
+      setIsSpeaking(true);
+      
+      if (supported) {
+        speak(`${analysis.equipmentName} ${analysis.model} identified. ${analysis.issueDetected}`);
       }
+      
+      setTimeout(() => setIsSpeaking(false), 5000);
+    },
+    onError: (error: Error) => {
+      setIsAnalyzing(false);
+      toast({
+        title: "Analysis Error",
+        description: "Failed to analyze equipment. Please try again.",
+        variant: "destructive"
+      });
     }
+  });
 
-    startCamera()
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
-    }
-  }, [])
-
-  const handleImageCapture = (imageSrc: string) => {
-    setLastCapturedImage(imageSrc)
-
-    if (conversationActive && transcript.trim()) {
-      handleConversationalAnalysis(imageSrc, transcript.trim())
-      resetTranscript()
-    } else if (!conversationActive) {
-      setIsAnalyzing(true)
-
-      // Demo analysis
-      setTimeout(() => {
+  // Real-time conversational analysis with Gemini
+  const conversationalAnalysisMutation = useMutation({
+    mutationFn: async ({ imageData, spokenInput }: { imageData: string; spokenInput: string }) => {
+      const response = await fetch(`${BASE_URL}/api/conversational-analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageData,
+          spokenInput,
+          sessionId
+        })
+      });
+      if (!response.ok) throw new Error("Failed to analyze with Gemini");
+      return response.json();
+    },
+    onSuccess: (result: {
+      visualAnalysis: any;
+      conversationalResponse: string;
+      voiceGuidance: string;
+    }) => {
+      const { visualAnalysis, conversationalResponse, voiceGuidance } = result;
+      
+      // Update equipment detection
+      if (visualAnalysis.equipmentId) {
         setDetectedEquipment({
-          id: "HX300-" + Date.now(),
-          name: "Hydraulic Pump",
-          model: "Series 3000",
-          issue: "Pressure irregularity detected",
-          confidence: 0.89,
-          position: { x: 33, y: 33, width: 48, height: 32 },
-        })
-
-        setAiMessage("Hydraulic pump Series 3000 identified. Pressure irregularity detected in main chamber.")
-        setIsSpeaking(true)
-
-        if (supported) {
-          speak("Hydraulic pump Series 3000 identified. Pressure irregularity detected in main chamber.")
-        }
-
-        setTimeout(() => setIsSpeaking(false), 4000)
-        setIsAnalyzing(false)
-      }, 2000)
+          id: visualAnalysis.equipmentId,
+          name: visualAnalysis.equipmentName,
+          model: visualAnalysis.model,
+          issue: visualAnalysis.issueDetected,
+          confidence: visualAnalysis.confidence,
+          position: visualAnalysis.position || { x: 33, y: 33, width: 48, height: 32 }
+        });
+        
+        setRepairSteps(visualAnalysis.repairSteps.map((step: any) => ({
+          id: step.stepNumber,
+          title: step.title,
+          description: step.description,
+          instructions: step.instructions,
+          status: step.stepNumber === 1 ? "current" : "pending"
+        })));
+      }
+      
+      // Speak the conversational response
+      const responseToSpeak = voiceGuidance || conversationalResponse;
+      setAiMessage(responseToSpeak);
+      setIsSpeaking(true);
+      
+      if (supported) {
+        speak(responseToSpeak);
+      }
+      
+      setTimeout(() => setIsSpeaking(false), 4000);
+      setIsAnalyzing(false);
+    },
+    onError: (error: Error) => {
+      setIsAnalyzing(false);
+      toast({
+        title: "Analysis Error",
+        description: "Failed to communicate with AI assistant",
+        variant: "destructive"
+      });
     }
-  }
+  });
+
+  // Generate voice guidance
+  const voiceGuidanceMutation = useMutation({
+    mutationFn: async (stepDescription: string) => {
+      const response = await fetch(`${BASE_URL}/api/voice-guidance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stepDescription,
+          sessionId
+        })
+      });
+      if (!response.ok) throw new Error("Failed to generate voice guidance");
+      return response.json();
+    },
+    onSuccess: (result: { voiceGuidance: string }) => {
+      const guidance = result.voiceGuidance;
+      setAiMessage(guidance);
+      setIsSpeaking(true);
+      
+      if (supported) {
+        speak(guidance);
+      }
+      
+      setTimeout(() => setIsSpeaking(false), 3000);
+    }
+  });
 
   // Initialize session and demo data
   useEffect(() => {
