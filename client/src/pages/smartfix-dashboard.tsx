@@ -77,6 +77,7 @@ export default function SmartFixDashboard() {
   // Real-time conversation state
   const [conversationActive, setConversationActive] = useState(false);
   const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(true); // Enable demo mode for immediate testing
   
   // Create a new repair session on component mount
   const createSessionMutation = useMutation({

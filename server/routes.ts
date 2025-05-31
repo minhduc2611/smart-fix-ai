@@ -30,6 +30,25 @@ if (!fs.existsSync(uploadsDir)) {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Test Gemini API connection
+  app.get("/api/test-gemini", async (req, res) => {
+    try {
+      const testResponse = await geminiService.generateVoiceGuidance("This is a connection test");
+      res.json({ 
+        status: "success", 
+        message: "Gemini API is working",
+        testResponse 
+      });
+    } catch (error) {
+      console.error("Gemini test failed:", error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Gemini API connection failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
   // Create a new repair session
   app.post("/api/repair-sessions", async (req, res) => {
     try {
