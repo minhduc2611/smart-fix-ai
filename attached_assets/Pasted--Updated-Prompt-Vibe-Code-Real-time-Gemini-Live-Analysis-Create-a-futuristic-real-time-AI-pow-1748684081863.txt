@@ -1,0 +1,81 @@
+✅ Updated Prompt (Vibe Code + Real-time Gemini Live Analysis)
+"Create a futuristic, real-time AI-powered support app called SmartFix AI, designed for technicians using smartphones or smart glasses in the field.
+
+The vibe: Industrial precision meets sci-fi intelligence. A calm, dark interface with neon blue accents. Feels like using JARVIS in a factory setting.
+
+Core Experience: Real-time Video Analysis via Gemini
+
+When the technician opens the camera, the app activates Gemini Live Stream.
+
+Gemini watches the environment through the camera — identifying tools, machine parts, components, warning lights, etc.
+
+It understands context: type of equipment, likely failure, missing parts, and previous history from the knowledge base.
+
+It matches the visual input with OEM documents, past repair logs, and known issues.
+
+Then it explains the issue clearly to the technician in natural voice, e.g.:
+
+“This is a hydraulic regulator. The pressure valve appears misaligned. This is a common fault in Model HX-300 after 500 hours.”
+
+Once understood, it begins speaking repair instructions step by step, waiting for confirmation to proceed.
+
+Example:
+
+“Step 1: Disconnect the power. Confirm when ready.”
+“Step 2: Use a torque wrench to loosen the top bolts.”
+“Step 3: Realign the valve shaft to match the central pin.”
+
+UI/UX Style:
+
+Split screen: live video on top, voice-synced instructions below.
+
+Voice interaction: technician can say “Done”, “Repeat step”, or “Show me diagram”.
+
+AI visual overlays highlight parts in the live feed.
+
+Emergency button for quick expert call (fallback).
+
+Data is logged silently in the background: voice, steps, duration.
+
+Backend & AI Architecture:
+
+Live Video Feed Ingestion using Gemini multimodal API.
+
+Real-Time Scene Understanding:
+
+Computer Vision: part detection, anomaly spotting (YOLO, CLIP).
+
+NLP: repair doc parsing (LangChain + Gemini embeddings).
+
+TTS: Realistic speech guidance (Google TTS / ElevenLabs).
+
+ASR: Technician voice feedback (Whisper or Gemini voice input).
+
+Contextual Matching Engine to suggest solution paths.
+
+Logging System for repair trace, voice responses, time per step.
+
+Database:
+
+PostgreSQL for structured data (users, machines, repair sessions).
+
+Pinecone or Weaviate for semantic search in documents, past cases, and parts.
+
+S3 or Cloud Storage for video/audio session logs.
+
+Tagline for Splash Screen:
+
+SmartFix AI – Your Eyes, Your Voice, Your Expert.
+
+Tech Stack Summary:
+
+Frontend: React Native + WebRTC
+
+Backend: FastAPI or Node.js
+
+AI: Gemini Live Stream + Whisper + TTS
+
+DB: PostgreSQL + Vector DB + Cloud Storage
+
+Hosting: GCP or Vercel + Firebase for quick prototyping"**
+
