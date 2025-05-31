@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect } from "react";
+import { useRef, useCallback, useState, useEffect, useMemo, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera, CameraOff } from "lucide-react";
 
@@ -7,7 +7,7 @@ interface WebcamCaptureProps {
   className?: string;
 }
 
-export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps) {
+const WebcamCapture = memo(function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -54,7 +54,7 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
   const captureImage = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
+    console.log("captureImage", "video:", video, "canvas:", canvas, "video.videoWidth:", video?.videoWidth, "video.videoHeight:", video?.videoHeight);
     if (video && canvas && video.videoWidth && video.videoHeight) {
       const context = canvas.getContext('2d');
       if (context) {
@@ -73,9 +73,11 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
   // Auto-capture for analysis every 10 seconds
   useEffect(() => {
     if (isStreaming && onCapture) {
+      console.log("Auto-capture for analysis 1", "isStreaming:", isStreaming);
       const interval = setInterval(() => {
+        console.log("Auto-capture for analysis 2", "isStreaming:", isStreaming);
         captureImage();
-      }, 10000);
+      }, 5000);
       
       return () => clearInterval(interval);
     }
@@ -91,7 +93,9 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
     };
   }, [startCamera, stopCamera]);
 
-  if (error) {
+  const errorContent = useMemo(() => {
+    if (!error) return null;
+    
     return (
       <div className={`flex items-center justify-center bg-gray-900 ${className}`}>
         <div className="text-center p-8">
@@ -104,42 +108,54 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
         </div>
       </div>
     );
+  }, [error, className, startCamera]);
+
+  const mainContent = useMemo(() => {
+    if (error) return null;
+
+    return (
+      <div className={`relative ${className}`}>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
+        />
+        
+        {/* Hidden canvas for image capture */}
+        <canvas
+          ref={canvasRef}
+          className="hidden"
+        />
+        
+        {/* Loading overlay */}
+        {!isStreaming && !error && (
+          <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[hsl(var(--neon-blue))] mx-auto mb-4"></div>
+              <p className="text-gray-400">Starting camera...</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Camera status indicator */}
+        {isStreaming && (
+          <div className="absolute top-4 left-4 flex items-center space-x-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">REC</span>
+          </div>
+        )}
+      </div>
+    );
+  }, [className, isStreaming, error]);
+
+  if (error) {
+    return errorContent;
   }
 
-  return (
-    <div className={`relative ${className}`}>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-full h-full object-cover"
-        style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
-      />
-      
-      {/* Hidden canvas for image capture */}
-      <canvas
-        ref={canvasRef}
-        className="hidden"
-      />
-      
-      {/* Loading overlay */}
-      {!isStreaming && !error && (
-        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[hsl(var(--neon-blue))] mx-auto mb-4"></div>
-            <p className="text-gray-400">Starting camera...</p>
-          </div>
-        </div>
-      )}
-      
-      {/* Camera status indicator */}
-      {isStreaming && (
-        <div className="absolute top-4 left-4 flex items-center space-x-2">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">REC</span>
-        </div>
-      )}
-    </div>
-  );
-}
+  return mainContent;
+});
+
+export { WebcamCapture };
