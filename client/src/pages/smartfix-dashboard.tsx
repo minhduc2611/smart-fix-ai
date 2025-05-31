@@ -9,6 +9,7 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ChatHistory } from "@/components/chat-history";
 import {
   Video,
   Mic,
@@ -28,6 +29,7 @@ import {
   HelpCircle,
   FileText,
   Loader2,
+  X,
 } from "lucide-react";
 
 interface DetectedEquipment {
@@ -64,6 +66,7 @@ export default function SmartFixDashboard() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const sessionStartTime = useRef(Date.now());
+  const [showHistory, setShowHistory] = useState(false);
 
   const { speak, speaking, supported } = useSpeechSynthesis();
   const {
@@ -332,10 +335,6 @@ export default function SmartFixDashboard() {
     //       responses[Math.floor(Math.random() * responses.length)];
     //     setAiMessage(randomResponse);
     //     setIsSpeaking(true);
-
-    //     if (supported) {
-    //       speak(randomResponse);
-    //     }
 
     //     // Add mock equipment detection
     //     setDetectedEquipment({
@@ -1019,6 +1018,7 @@ export default function SmartFixDashboard() {
             <Button
               variant="outline"
               className="border-slate-600 text-slate-300 hover:border-blue-400 hover:text-blue-400 flex-1 sm:flex-none"
+              onClick={() => setShowHistory(true)}
             >
               <History className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">View </span>History
@@ -1083,6 +1083,9 @@ export default function SmartFixDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Chat History Modal */}
+      {showHistory && <ChatHistory onClose={() => setShowHistory(false)} />}
     </div>
   );
 }
