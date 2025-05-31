@@ -1,14 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { WebcamCapture } from "@/components/ui/webcam"
-import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis"
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
 import {
   Video,
@@ -32,6 +28,14 @@ import {
   Download,
 } from "lucide-react"
 
+// Inline TypeScript declarations
+declare global {
+  interface Window {
+    SpeechRecognition: any
+    webkitSpeechRecognition: any
+  }
+}
+
 interface DetectedEquipment {
   id: string
   name: string
@@ -50,125 +54,7 @@ interface RepairStep {
   subInstructions?: string[]
 }
 
-// Define styles as a constant
-const styles = `
-  @keyframes scanner-line {
-    0% { transform: translateY(0); box-shadow: 0 0 10px hsl(var(--neon-blue)); }
-    100% { transform: translateY(100vh); box-shadow: 0 0 10px hsl(var(--neon-blue)); }
-  }
-
-  .scanner-line {
-    background: linear-gradient(to bottom, transparent, hsl(var(--neon-blue)), transparent);
-    animation: scanner-line 2s linear infinite;
-  }
-
-  .equipment-overlay {
-    border: 1px solid hsl(var(--success-green));
-    box-shadow: 0 0 10px hsl(var(--success-green));
-  }
-
-  .voice-wave {
-    background: hsl(var(--neon-blue));
-    animation: voiceWave 0.5s ease-in-out infinite alternate;
-  }
-
-  @keyframes voiceWave {
-    from { height: 5px; }
-    to { height: 20px; }
-  }
-
-  /* Enhanced mobile styles */
-  @media (max-width: 640px) {
-    .mobile-hidden {
-      display: none;
-    }
-    
-    .mobile-full-width {
-      width: 100%;
-    }
-    
-    .mobile-p-2 {
-      padding: 0.5rem;
-    }
-    
-    .mobile-text-sm {
-      font-size: 0.875rem;
-    }
-
-    /* Ensure touch targets are at least 44px */
-    button {
-      min-height: 44px;
-      min-width: 44px;
-    }
-  }
-
-  /* Prevent pull-to-refresh on mobile */
-  body {
-    overscroll-behavior-y: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Add safe area insets for modern mobile browsers */
-  .safe-area-inset {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-
-  /* Enhanced animations */
-  .animate-glow {
-    animation: glow 2s ease-in-out infinite alternate;
-  }
-
-  @keyframes glow {
-    from { text-shadow: 0 0 5px hsl(var(--neon-blue)); }
-    to { text-shadow: 0 0 20px hsl(var(--neon-blue)), 0 0 30px hsl(var(--neon-blue)); }
-  }
-
-  .animate-pulse-neon {
-    animation: pulse-neon 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  @keyframes pulse-neon {
-    0%, 100% { 
-      opacity: 1;
-      box-shadow: 0 0 5px hsl(var(--neon-blue));
-    }
-    50% { 
-      opacity: 0.8;
-      box-shadow: 0 0 20px hsl(var(--neon-blue)), 0 0 30px hsl(var(--neon-blue));
-    }
-  }
-
-  .animate-slide-up {
-    animation: slide-up 0.3s ease-out;
-  }
-
-  @keyframes slide-up {
-    from { 
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to { 
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  /* Touch-friendly improvements */
-  .touch-manipulation {
-    touch-action: manipulation;
-  }
-
-  /* Better focus states for accessibility */
-  button:focus-visible {
-    outline: 2px solid hsl(var(--neon-blue));
-    outline-offset: 2px;
-  }
-`
-
-const SmartFixDashboard = () => {
+export default function SmartFixDashboard() {
   const [sessionTime, setSessionTime] = useState(0)
   const [currentStep, setCurrentStep] = useState(1)
   const [sessionActive, setSessionActive] = useState(true)
@@ -182,202 +68,209 @@ const SmartFixDashboard = () => {
   const [sessionId, setSessionId] = useState<number | null>(null)
   const sessionStartTime = useRef(Date.now())
 
-  const { speak, speaking, supported } = useSpeechSynthesis()
-  const {
-    isListening,
-    transcript,
-    startListening,
-    stopListening,
-    resetTranscript,
-    supported: speechRecognitionSupported,
-  } = useSpeechRecognition()
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-
   // Real-time conversation state
   const [conversationActive, setConversationActive] = useState(false)
   const [lastCapturedImage, setLastCapturedImage] = useState<string | null>(null)
-  const [demoMode, setDemoMode] = useState(true) // Enable demo mode for immediate testing
+  const [demoMode, setDemoMode] = useState(true)
 
-  // Add PWA installation state
+  // PWA installation state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [isInstallable, setIsInstallable] = useState(false)
 
-  // Create a new repair session on component mount
-  const createSessionMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/repair-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          technicianName: "Alex Rodriguez",
-          status: "analyzing",
-        }),
-      })
-      if (!response.ok) throw new Error("Failed to create session")
-      return response.json()
-    },
-    onSuccess: (session) => {
-      setSessionId(session.id)
-    },
-    onError: (error) => {
-      toast({
-        title: "Session Error",
-        description: "Failed to create repair session",
-        variant: "destructive",
-      })
-    },
-  })
+  // Speech synthesis state
+  const [speaking, setSpeaking] = useState(false)
+  const [supported, setSupported] = useState(false)
 
-  // Analyze image with Gemini AI
-  const analyzeImageMutation = useMutation({
-    mutationFn: async (imageData: string) => {
-      const response = await fetch("/api/analyze-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageData,
-          sessionId,
-        }),
-      })
-      if (!response.ok) throw new Error("Failed to analyze image")
-      return response.json()
+  // Speech recognition state
+  const [isListening, setIsListening] = useState(false)
+  const [transcript, setTranscript] = useState("")
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false)
+  const recognitionRef = useRef<any>(null)
+
+  // Camera stream state
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Orientation state for mobile landscape
+  const [isLandscape, setIsLandscape] = useState(false)
+
+  // Detect orientation changes
+  useEffect(() => {
+    const handleOrientationChange = () => {
+      const isLandscapeMode = window.innerHeight < window.innerWidth && window.innerWidth < 1024
+      setIsLandscape(isLandscapeMode)
+    }
+
+    handleOrientationChange()
+    window.addEventListener("resize", handleOrientationChange)
+    window.addEventListener("orientationchange", handleOrientationChange)
+
+    return () => {
+      window.removeEventListener("resize", handleOrientationChange)
+      window.removeEventListener("orientationchange", handleOrientationChange)
+    }
+  }, [])
+
+  const { toast } = useToast()
+
+  // Inline Speech Synthesis Hook Logic
+  useEffect(() => {
+    setSupported("speechSynthesis" in window)
+  }, [])
+
+  const speak = useCallback(
+    (text: string) => {
+      if (!supported) return
+
+      // Stop any ongoing speech
+      window.speechSynthesis.cancel()
+
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 0.9
+      utterance.pitch = 1
+      utterance.volume = 1
+
+      utterance.onstart = () => setSpeaking(true)
+      utterance.onend = () => setSpeaking(false)
+      utterance.onerror = () => setSpeaking(false)
+
+      window.speechSynthesis.speak(utterance)
     },
-    onSuccess: (analysis) => {
-      setDetectedEquipment({
-        id: analysis.equipmentId,
-        name: analysis.equipmentName,
-        model: analysis.model,
-        issue: analysis.issueDetected,
-        confidence: analysis.confidence,
-        position: analysis.position || { x: 33, y: 33, width: 48, height: 32 },
-      })
+    [supported],
+  )
 
-      setRepairSteps(
-        analysis.repairSteps.map((step: any) => ({
-          id: step.stepNumber,
-          title: step.title,
-          description: step.description,
-          instructions: step.instructions,
-          status: step.stepNumber === 1 ? "current" : "pending",
-        })),
-      )
+  // Inline Speech Recognition Hook Logic
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    setSpeechRecognitionSupported(!!SpeechRecognition)
 
-      setIsAnalyzing(false)
-      setAiMessage(`${analysis.equipmentName} ${analysis.model} identified. ${analysis.issueDetected}`)
-      setIsSpeaking(true)
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = "en-US"
 
-      if (supported) {
-        speak(`${analysis.equipmentName} ${analysis.model} identified. ${analysis.issueDetected}`)
+      recognition.onresult = (event: any) => {
+        let finalTranscript = ""
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript
+          }
+        }
+        if (finalTranscript) {
+          setTranscript(finalTranscript)
+        }
       }
 
-      setTimeout(() => setIsSpeaking(false), 5000)
-    },
-    onError: (error) => {
-      setIsAnalyzing(false)
-      toast({
-        title: "Analysis Error",
-        description: "Failed to analyze equipment. Please try again.",
-        variant: "destructive",
-      })
-    },
-  })
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error)
+        setIsListening(false)
+      }
 
-  // Real-time conversational analysis with Gemini
-  const conversationalAnalysisMutation = useMutation({
-    mutationFn: async ({ imageData, spokenInput }: { imageData: string; spokenInput: string }) => {
-      const response = await fetch("/api/conversational-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageData,
-          spokenInput,
-          sessionId,
-        }),
-      })
-      if (!response.ok) throw new Error("Failed to analyze with Gemini")
-      return response.json()
-    },
-    onSuccess: (result) => {
-      const { visualAnalysis, conversationalResponse, voiceGuidance } = result
+      recognition.onend = () => {
+        setIsListening(false)
+      }
 
-      // Update equipment detection
-      if (visualAnalysis.equipmentId) {
-        setDetectedEquipment({
-          id: visualAnalysis.equipmentId,
-          name: visualAnalysis.equipmentName,
-          model: visualAnalysis.model,
-          issue: visualAnalysis.issueDetected,
-          confidence: visualAnalysis.confidence,
-          position: visualAnalysis.position || { x: 33, y: 33, width: 48, height: 32 },
+      recognitionRef.current = recognition
+    }
+  }, [])
+
+  const startListening = useCallback(() => {
+    if (recognitionRef.current && speechRecognitionSupported) {
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch (error) {
+        console.error("Error starting speech recognition:", error)
+      }
+    }
+  }, [speechRecognitionSupported])
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    }
+  }, [])
+
+  const resetTranscript = useCallback(() => {
+    setTranscript("")
+  }, [])
+
+  // Inline WebcamCapture Logic
+  useEffect(() => {
+    const startCamera = async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "environment",
+          },
+          audio: false,
         })
 
-        setRepairSteps(
-          visualAnalysis.repairSteps.map((step: any) => ({
-            id: step.stepNumber,
-            title: step.title,
-            description: step.description,
-            instructions: step.instructions,
-            status: step.stepNumber === 1 ? "current" : "pending",
-          })),
-        )
+        setStream(mediaStream)
+        setCameraActive(true)
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream
+        }
+      } catch (err) {
+        console.error("Error accessing webcam:", err)
+        setError("Camera access denied or not available")
+        setCameraActive(false)
       }
+    }
 
-      // Speak the conversational response
-      const responseToSpeak = voiceGuidance || conversationalResponse
-      setAiMessage(responseToSpeak)
-      setIsSpeaking(true)
+    startCamera()
 
-      if (supported) {
-        speak(responseToSpeak)
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop())
       }
+    }
+  }, [])
 
-      setTimeout(() => setIsSpeaking(false), 4000)
-      setIsAnalyzing(false)
-    },
-    onError: (error) => {
-      setIsAnalyzing(false)
-      toast({
-        title: "Analysis Error",
-        description: "Failed to communicate with AI assistant",
-        variant: "destructive",
-      })
-    },
-  })
+  const handleImageCapture = (imageSrc: string) => {
+    setLastCapturedImage(imageSrc)
 
-  // Generate voice guidance
-  const voiceGuidanceMutation = useMutation({
-    mutationFn: async (stepDescription: string) => {
-      const response = await fetch("/api/voice-guidance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stepDescription,
-          sessionId,
-        }),
-      })
-      if (!response.ok) throw new Error("Failed to generate voice guidance")
-      return response.json()
-    },
-    onSuccess: (result) => {
-      const guidance = result.voiceGuidance
-      setAiMessage(guidance)
-      setIsSpeaking(true)
+    if (conversationActive && transcript.trim()) {
+      handleConversationalAnalysis(imageSrc, transcript.trim())
+      resetTranscript()
+    } else if (!conversationActive) {
+      setIsAnalyzing(true)
 
-      if (supported) {
-        speak(guidance)
-      }
+      // Demo analysis
+      setTimeout(() => {
+        setDetectedEquipment({
+          id: "HX300-" + Date.now(),
+          name: "Hydraulic Pump",
+          model: "Series 3000",
+          issue: "Pressure irregularity detected",
+          confidence: 0.89,
+          position: { x: 33, y: 33, width: 48, height: 32 },
+        })
 
-      setTimeout(() => setIsSpeaking(false), 3000)
-    },
-  })
+        setAiMessage("Hydraulic pump Series 3000 identified. Pressure irregularity detected in main chamber.")
+        setIsSpeaking(true)
 
-  // Initialize session on mount
+        if (supported) {
+          speak("Hydraulic pump Series 3000 identified. Pressure irregularity detected in main chamber.")
+        }
+
+        setTimeout(() => setIsSpeaking(false), 4000)
+        setIsAnalyzing(false)
+      }, 2000)
+    }
+  }
+
+  // Initialize session and demo data
   useEffect(() => {
-    createSessionMutation.mutate()
-    
-    // Add initial demo repair steps
-    console.log("Setting initial repair steps...")
+    setSessionId(Date.now())
+
+    // Demo repair steps
     setRepairSteps([
       {
         id: 1,
@@ -388,30 +281,25 @@ const SmartFixDashboard = () => {
         subInstructions: [
           "Look for oil leaks or fluid drips",
           "Listen for unusual noises",
-          "Check temperature readings"
-        ]
+          "Check temperature readings",
+        ],
       },
       {
         id: 2,
         title: "Safety Check",
         description: "Ensure safe working conditions",
         instructions: "Verify power is off and equipment is locked out",
-        status: "pending"
+        status: "pending",
       },
       {
         id: 3,
         title: "Component Inspection",
         description: "Detailed inspection of critical components",
         instructions: "Check belts, filters, and connection points",
-        status: "pending"
-      }
+        status: "pending",
+      },
     ])
   }, [])
-
-  // Add debug logging for repair steps
-  useEffect(() => {
-    console.log("Current repair steps:", repairSteps)
-  }, [repairSteps])
 
   // Format session time
   const formatTime = (seconds: number) => {
@@ -431,94 +319,47 @@ const SmartFixDashboard = () => {
     }
   }, [sessionActive])
 
-  // Handle image capture and store for conversation
-  const handleImageCapture = (imageSrc: string) => {
-    setLastCapturedImage(imageSrc)
-
-    if (conversationActive && transcript.trim()) {
-      // If in conversation mode and we have speech, analyze immediately
-      handleConversationalAnalysis(imageSrc, transcript.trim())
-      resetTranscript()
-    } else if (!conversationActive) {
-      // Traditional analysis mode
-      if (!sessionId) {
-        toast({
-          title: "Session Not Ready",
-          description: "Please wait for session initialization",
-          variant: "destructive",
-        })
-        return
-      }
-      setIsAnalyzing(true)
-      analyzeImageMutation.mutate(imageSrc)
-    }
-  }
-
-  // Handle real-time conversational analysis
+  // Handle conversational analysis
   const handleConversationalAnalysis = (imageData: string, spokenText: string) => {
-    if (!sessionId) return
-
     setIsAnalyzing(true)
 
-    if (demoMode) {
-      // Immediate demo response for testing
-      setTimeout(() => {
-        const responses = [
-          `I heard you say "${spokenText}". I can see equipment in the camera view. Let me analyze what needs attention.`,
-          `Based on what you said "${spokenText}", I'm examining the equipment. I can identify potential maintenance points.`,
-          `You mentioned "${spokenText}". I'm analyzing the visual data and can provide specific guidance for this equipment.`,
-          `I understand "${spokenText}". Looking at the equipment, I can help you with troubleshooting steps.`,
-        ]
+    setTimeout(() => {
+      const responses = [
+        `I heard you say "${spokenText}". I can see equipment that needs attention. Let me guide you through the inspection.`,
+        `Based on "${spokenText}", I'm analyzing the equipment. I can identify potential maintenance points for you.`,
+        `You mentioned "${spokenText}". Looking at the visual data, I can provide specific troubleshooting guidance.`,
+        `I understand "${spokenText}". The equipment shows signs that require careful examination. Let me help.`,
+      ]
 
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-        setAiMessage(randomResponse)
-        setIsSpeaking(true)
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+      setAiMessage(randomResponse)
+      setIsSpeaking(true)
 
-        if (supported) {
-          speak(randomResponse)
-        }
+      if (supported) {
+        speak(randomResponse)
+      }
 
-        // Add mock equipment detection
-        setDetectedEquipment({
-          id: "DEMO_" + Date.now(),
-          name: "Industrial Equipment",
-          model: "Smart Device",
-          issue: "Requires inspection based on your input",
-          confidence: 0.85,
-          position: { x: 30, y: 30, width: 40, height: 40 },
-        })
-
-        setRepairSteps([
-          {
-            id: 1,
-            title: "Initial Assessment",
-            description: "Examine the equipment based on your voice input",
-            instructions: `Responding to: "${spokenText}" - Check the equipment for any visible issues`,
-            status: "current",
-          },
-        ])
-
-        setTimeout(() => setIsSpeaking(false), 4000)
-        setIsAnalyzing(false)
-      }, 1500)
-    } else {
-      // Real Gemini analysis
-      conversationalAnalysisMutation.mutate({
-        imageData,
-        spokenInput: spokenText,
+      setDetectedEquipment({
+        id: "CONV_" + Date.now(),
+        name: "Industrial Equipment",
+        model: "Smart Device",
+        issue: "Requires inspection based on your input",
+        confidence: 0.85,
+        position: { x: 30, y: 30, width: 40, height: 40 },
       })
-    }
+
+      setTimeout(() => setIsSpeaking(false), 4000)
+      setIsAnalyzing(false)
+    }, 1500)
   }
 
   // Toggle conversation mode
   const toggleConversationMode = () => {
     if (conversationActive) {
-      // Stop conversation
       setConversationActive(false)
       stopListening()
       setAiMessage("Conversation mode disabled. Use camera button for manual analysis.")
     } else {
-      // Start conversation
       if (!speechRecognitionSupported) {
         toast({
           title: "Speech Recognition Not Available",
@@ -541,10 +382,8 @@ const SmartFixDashboard = () => {
   // Handle speech input when transcript changes
   useEffect(() => {
     if (conversationActive && transcript.trim() && lastCapturedImage) {
-      // Debounce speech input to avoid too many requests
       const timer = setTimeout(() => {
         if (transcript.trim().length > 10) {
-          // Only process meaningful speech
           handleConversationalAnalysis(lastCapturedImage, transcript.trim())
           resetTranscript()
         }
@@ -568,7 +407,6 @@ const SmartFixDashboard = () => {
 
     setCurrentStep((prev) => prev + 1)
 
-    // Speak next instruction
     const nextStep = repairSteps.find((step) => step.id === stepId + 1)
     if (nextStep && supported) {
       const message = `Step ${nextStep.id} complete. ${nextStep.description}`
@@ -600,7 +438,10 @@ const SmartFixDashboard = () => {
   }
 
   const handleEmergencyContact = () => {
-    alert("Connecting to emergency support...\nEstimated wait time: 30 seconds")
+    toast({
+      title: "Emergency Support",
+      description: "Connecting to emergency support... Estimated wait time: 30 seconds",
+    })
   }
 
   const handleSaveSession = () => {
@@ -614,6 +455,11 @@ const SmartFixDashboard = () => {
 
     console.log("Session saved:", sessionData)
     localStorage.setItem("smartfix_session", JSON.stringify(sessionData))
+
+    toast({
+      title: "Session Saved",
+      description: "Repair session has been saved successfully",
+    })
   }
 
   const completedSteps = repairSteps.filter((step) => step.status === "completed").length
@@ -634,153 +480,169 @@ const SmartFixDashboard = () => {
       const { outcome } = await deferredPrompt.userChoice
       if (outcome === "accepted") {
         setIsInstallable(false)
+        toast({
+          title: "App Installed",
+          description: "SmartFix AI has been installed to your device",
+        })
       }
       setDeferredPrompt(null)
     }
   }
 
-  // Register service worker
-  useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker
-          .register("/sw.js")
-          .then((registration) => {
-            console.log("SW registered:", registration)
-          })
-          .catch((error) => {
-            console.log("SW registration failed:", error)
-          })
-      })
-    }
-  }, [])
-
-  // Add styles to document head on component mount
-  useEffect(() => {
-    const styleElement = document.createElement("style")
-    styleElement.textContent = styles
-    document.head.appendChild(styleElement)
-
-    // Cleanup on unmount
-    return () => {
-      document.head.removeChild(styleElement)
-    }
-  }, [])
-
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-[hsl(var(--primary-dark))] to-[hsl(var(--secondary-dark))] safe-area-inset">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white overflow-hidden">
       {/* Header */}
-      <header className="p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[hsl(var(--neon-blue))]/20 bg-black/30 backdrop-blur-sm gap-3 sm:gap-0">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[hsl(var(--neon-blue))] rounded-lg flex items-center justify-center">
-            <Brain className="text-black text-sm sm:text-lg" />
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-black/20 border-b border-cyan-500/20 p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/25">
+              <Brain className="text-white text-lg" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                SmartFix AI
+              </h1>
+              <p className="text-xs text-gray-400">Real-time Field Support</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold text-[hsl(var(--neon-blue))] animate-glow">SmartFix AI</h1>
-            <p className="text-xs text-gray-400">Real-time Field Support</p>
-          </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {/* PWA Install Button */}
-          {isInstallable && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* PWA Install Button */}
+            {isInstallable && (
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-lg"
+                onClick={handleInstallPWA}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Install App</span>
+                <span className="sm:hidden">Install</span>
+              </Button>
+            )}
+
+            {/* Connection Status */}
+            <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-xs text-green-400 font-medium">LIVE</span>
+            </div>
+
+            {/* Landscape Mode Indicator */}
+            {isLandscape && (
+              <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
+                <span className="text-xs text-cyan-400 font-medium">LANDSCAPE</span>
+              </div>
+            )}
+
+            {/* Conversation Mode Toggle */}
             <Button
               size="sm"
-              className="bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))] text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-3 sm:px-4"
-              onClick={handleInstallPWA}
+              variant={conversationActive ? "default" : "outline"}
+              className={`
+                ${
+                  conversationActive
+                    ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg"
+                    : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
+                }
+              `}
+              onClick={toggleConversationMode}
+              disabled={!speechRecognitionSupported}
             >
-              <Download className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Install App</span>
-              <span className="xs:hidden">Install</span>
+              {conversationActive ? (
+                <>
+                  <MicOff className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">End Chat</span>
+                  <span className="sm:hidden">End</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Start Chat</span>
+                  <span className="sm:hidden">Chat</span>
+                </>
+              )}
             </Button>
-          )}
 
-          {/* Connection Status */}
-          <div className="flex items-center gap-2 px-2 py-1 bg-black/20 rounded-lg">
-            <div className="w-2 h-2 bg-[hsl(var(--success-green))] rounded-full animate-pulse-neon"></div>
-            <span className="text-xs text-[hsl(var(--success-green))] font-mono">LIVE</span>
+            {/* Emergency Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-red-500 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+              onClick={handleEmergencyContact}
+            >
+              <Phone className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Emergency</span>
+              <span className="sm:hidden">SOS</span>
+            </Button>
           </div>
-
-          {/* Conversation Mode Toggle */}
-          <Button
-            size="sm"
-            variant={conversationActive ? "default" : "outline"}
-            className={`
-        text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-3 sm:px-4
-        ${
-          conversationActive
-            ? "bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))] shadow-lg"
-            : "border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
-        }
-      `}
-            onClick={toggleConversationMode}
-            disabled={!speechRecognitionSupported}
-          >
-            {conversationActive ? (
-              <>
-                <MicOff className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">END CHAT</span>
-                <span className="sm:hidden">END</span>
-              </>
-            ) : (
-              <>
-                <Mic className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">START CHAT</span>
-                <span className="sm:hidden">CHAT</span>
-              </>
-            )}
-          </Button>
-
-          {/* Emergency Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-[hsl(var(--warning-orange))]/20 border-[hsl(var(--warning-orange))] text-[hsl(var(--warning-orange))] hover:bg-[hsl(var(--warning-orange))] hover:text-white text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-3 sm:px-4 shadow-lg"
-            onClick={handleEmergencyContact}
-          >
-            <Phone className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
-            <span className="hidden sm:inline">EMERGENCY</span>
-            <span className="sm:hidden">SOS</span>
-          </Button>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div
+        className={`flex h-[calc(100vh-80px)] ${
+          isLandscape
+            ? "flex-row" // Force horizontal layout in mobile landscape
+            : "flex-col lg:flex-row" // Original responsive behavior
+        }`}
+      >
         {/* Video Feed Section */}
-        <div className="w-full lg:w-3/5 h-[40vh] lg:h-auto relative bg-black border-b lg:border-b-0 lg:border-r border-[hsl(var(--neon-blue))]/20">
+        <div
+          className={`relative bg-black border-cyan-500/20 ${
+            isLandscape
+              ? "w-3/5 h-full border-r" // Mobile landscape: left side, full height
+              : "w-full lg:w-3/5 h-[45vh] lg:h-full border-b lg:border-b-0 lg:border-r" // Original responsive
+          }`}
+        >
           <div className="relative h-full">
-            <WebcamCapture onCapture={handleImageCapture} className="w-full h-full object-cover" />
+            {/* Inline WebcamCapture */}
+            <div className="w-full h-full relative">
+              {error ? (
+                <div className="flex items-center justify-center h-full bg-gray-900 text-white">
+                  <div className="text-center">
+                    <Camera className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                    <p className="text-sm text-gray-400">{error}</p>
+                    <Button onClick={() => window.location.reload()} className="mt-4 bg-cyan-500 hover:bg-cyan-600">
+                      Retry Camera Access
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              )}
+            </div>
 
             {/* Scanner Line Effect */}
-            {isAnalyzing && <div className="absolute top-0 left-0 w-full h-1 scanner-line"></div>}
+            {isAnalyzing && (
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse"></div>
+            )}
 
             {/* Equipment Detection Overlay */}
             {detectedEquipment && (
               <div className="absolute inset-0">
-                <div className="absolute top-1/3 left-1/3 w-32 sm:w-48 h-24 sm:h-32 equipment-overlay rounded-lg animate-pulse">
-                  <div className="absolute -top-8 left-0 bg-[hsl(var(--success-green))] text-black px-2 py-1 rounded text-xs font-bold">
+                <div className="absolute top-1/3 left-1/3 w-32 sm:w-48 h-24 sm:h-32 border-2 border-green-400 rounded-lg animate-pulse shadow-lg shadow-green-400/25">
+                  <div className="absolute -top-8 left-0 bg-green-400 text-black px-3 py-1 rounded-md text-xs font-bold">
                     {detectedEquipment.name}
                   </div>
                 </div>
 
                 {/* Issue Indicator */}
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div className="w-4 sm:w-6 h-4 sm:h-6 bg-[hsl(var(--warning-orange))] rounded-full animate-ping"></div>
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 sm:w-3 h-2 sm:h-3 bg-[hsl(var(--warning-orange))] rounded-full"></div>
+                  <div className="w-6 h-6 bg-orange-400 rounded-full animate-ping"></div>
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-orange-400 rounded-full"></div>
                 </div>
 
                 {/* Measurement Overlay */}
-                <div className="absolute bottom-4 left-4 bg-black/30 backdrop-blur-sm p-2 rounded-lg">
-                  <div className="text-xs text-[hsl(var(--neon-blue))] font-mono space-y-1">
+                <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm p-3 rounded-xl border border-cyan-500/20">
+                  <div className="text-xs text-cyan-400 font-mono space-y-1">
                     <div>
-                      PRESSURE: <span className="text-[hsl(var(--warning-orange))]">142 PSI</span>
+                      PRESSURE: <span className="text-orange-400">142 PSI</span>
                     </div>
                     <div>
-                      TEMP: <span className="text-[hsl(var(--success-green))]">68°F</span>
+                      TEMP: <span className="text-green-400">68°F</span>
                     </div>
                     <div>
-                      STATUS: <span className="text-[hsl(var(--warning-orange))]">MISALIGNED</span>
+                      STATUS: <span className="text-orange-400">MISALIGNED</span>
                     </div>
                   </div>
                 </div>
@@ -792,9 +654,9 @@ const SmartFixDashboard = () => {
               <Button
                 size="icon"
                 variant="outline"
-                className="bg-[hsl(var(--secondary-dark))]/80 border-[hsl(var(--neon-blue))]/50 text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                className="bg-black/60 backdrop-blur-sm border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
                 onClick={() => {
-                  const video = document.querySelector("video")
+                  const video = videoRef.current
                   const canvas = document.createElement("canvas")
                   if (video && video.videoWidth && video.videoHeight) {
                     canvas.width = video.videoWidth
@@ -807,18 +669,14 @@ const SmartFixDashboard = () => {
                     }
                   }
                 }}
-                disabled={isAnalyzing || analyzeImageMutation.isPending}
+                disabled={isAnalyzing}
               >
-                {isAnalyzing || analyzeImageMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Camera className="h-4 w-4" />
-                )}
+                {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               </Button>
               <Button
                 size="icon"
                 variant="outline"
-                className="bg-[hsl(var(--secondary-dark))]/80 border-[hsl(var(--neon-blue))]/50 text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black"
+                className="bg-black/60 backdrop-blur-sm border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
               >
                 <Maximize className="h-4 w-4" />
               </Button>
@@ -827,32 +685,28 @@ const SmartFixDashboard = () => {
         </div>
 
         {/* Instructions Panel */}
-        <div className="w-full lg:w-2/5 flex flex-col bg-[hsl(var(--secondary-dark))] overflow-hidden">
+        <div
+          className={`flex flex-col bg-slate-900/95 backdrop-blur-sm overflow-hidden ${
+            isLandscape
+              ? "w-2/5" // Mobile landscape: right side
+              : "w-full lg:w-2/5" // Original responsive
+          }`}
+        >
           {/* AI Analysis Header */}
-          <div className="p-3 sm:p-4 border-b border-[hsl(var(--neon-blue))]/20">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="w-6 sm:w-8 h-6 sm:h-8 bg-[hsl(var(--neon-blue))] rounded-full flex items-center justify-center animate-pulse-neon">
-                <Brain className="text-black text-xs sm:text-sm" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm sm:text-base text-[hsl(var(--neon-blue))]">AI Analysis</h3>
-                <p className="text-xs text-gray-400">Gemini Live Processing</p>
-              </div>
-            </div>
-
+          <div className="border-b border-cyan-500/20">
             {/* Analysis Results */}
             {detectedEquipment && (
-              <Card className="bg-black/30 backdrop-blur-sm border-[hsl(var(--neon-blue))]/20 animate-slide-up">
-                <CardContent className="p-2 sm:p-3">
-                  <div className="text-xs sm:text-sm space-y-2">
+              <Card className="bg-black/40 backdrop-blur-sm border border-cyan-500/20 shadow-xl">
+                <CardContent className="p-3">
+                  <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <Check className="h-3 sm:h-4 w-3 sm:w-4 text-[hsl(var(--success-green))]" />
-                      <span className="text-[hsl(var(--success-green))] font-semibold">Equipment Identified</span>
+                      <Check className="h-4 w-4 text-green-400" />
+                      <span className="text-green-400 font-semibold text-sm">Equipment Identified</span>
                     </div>
-                    <p className="text-gray-300">
+                    <p className="text-gray-300 text-sm">
                       {detectedEquipment.name} {detectedEquipment.model}
                     </p>
-                    <p className="text-[hsl(var(--warning-orange))] text-xs sm:text-sm flex items-center">
+                    <p className="text-orange-400 text-sm flex items-center">
                       <AlertTriangle className="h-3 w-3 mr-1" />
                       {detectedEquipment.issue}
                     </p>
@@ -863,23 +717,21 @@ const SmartFixDashboard = () => {
           </div>
 
           {/* Voice Assistant */}
-          <div className="p-3 sm:p-4 border-b border-[hsl(var(--neon-blue))]/20">
+          <div className="p-4 border-b border-cyan-500/20">
             <div className="flex items-center space-x-3 mb-3">
               <div
-                className={`w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center ${
-                  conversationActive
-                    ? "bg-[hsl(var(--neon-blue))] animate-pulse-neon"
-                    : "bg-[hsl(var(--electric-blue))]"
+                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  conversationActive ? "bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse" : "bg-gray-600"
                 }`}
               >
                 {conversationActive ? (
-                  <Mic className="text-black text-xs sm:text-sm" />
+                  <Mic className="text-white text-sm" />
                 ) : (
-                  <MicOff className="text-white text-xs sm:text-sm" />
+                  <MicOff className="text-white text-sm" />
                 )}
               </div>
               <div>
-                <span className="font-semibold text-sm sm:text-base">Gemini AI Assistant</span>
+                <span className="font-semibold text-cyan-400">Gemini AI Assistant</span>
                 <p className="text-xs text-gray-400">{conversationActive ? "Listening & Watching" : "Manual Mode"}</p>
               </div>
             </div>
@@ -888,14 +740,14 @@ const SmartFixDashboard = () => {
             {conversationActive && (
               <div className="mb-3">
                 <div className="flex items-center space-x-2 mb-2">
-                  <div className="w-2 h-2 bg-[hsl(var(--neon-blue))] rounded-full animate-pulse"></div>
-                  <span className="text-xs text-[hsl(var(--neon-blue))]">LISTENING</span>
+                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-cyan-400">LISTENING</span>
                 </div>
                 {transcript && (
-                  <Card className="bg-black/30 backdrop-blur-sm border-[hsl(var(--neon-blue))]/20 mb-2">
+                  <Card className="bg-black/40 backdrop-blur-sm border border-cyan-500/20 mb-2">
                     <CardContent className="p-2">
                       <p className="text-xs text-gray-400">You said:</p>
-                      <p className="text-xs sm:text-sm text-[hsl(var(--neon-blue))]">"{transcript}"</p>
+                      <p className="text-sm text-cyan-400">"{transcript}"</p>
                     </CardContent>
                   </Card>
                 )}
@@ -908,56 +760,56 @@ const SmartFixDashboard = () => {
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
-                    className="voice-wave w-1 rounded bg-[hsl(var(--neon-blue))]"
+                    className="w-1 bg-cyan-400 rounded animate-pulse"
                     style={{
                       height: `${16 + Math.random() * 16}px`,
                       animationDelay: `${i * 0.1}s`,
                     }}
                   />
                 ))}
-                <span className="text-xs sm:text-sm text-gray-400 ml-2">AI Speaking...</span>
+                <span className="text-sm text-gray-400 ml-2">AI Speaking...</span>
               </div>
             )}
 
             {/* AI Response */}
             {aiMessage && (
-              <Card className="bg-black/30 backdrop-blur-sm border-[hsl(var(--neon-blue))]/20 mb-3">
-                <CardContent className="p-2 sm:p-3">
+              <Card className="bg-black/40 backdrop-blur-sm border border-cyan-500/20 mb-3">
+                <CardContent className="p-3">
                   <p className="text-xs text-gray-400 mb-1">Gemini AI:</p>
-                  <p className="text-xs sm:text-sm text-gray-300">"{aiMessage}"</p>
+                  <p className="text-sm text-gray-300">"{aiMessage}"</p>
                 </CardContent>
               </Card>
             )}
 
             {/* Voice Controls */}
-            <div className="flex space-x-2">
+            <div className="flex gap-2">
               {conversationActive ? (
                 <Button
                   size="sm"
-                  className="flex-1 bg-[hsl(var(--warning-orange))] text-white hover:bg-[hsl(var(--warning-orange))]/80 text-xs sm:text-sm"
+                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
                   onClick={toggleConversationMode}
                 >
-                  <MicOff className="mr-1 sm:mr-2 h-3 w-3" />
+                  <MicOff className="mr-2 h-4 w-4" />
                   Stop Chat
                 </Button>
               ) : (
                 <>
                   <Button
                     size="sm"
-                    className="flex-1 bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))] text-xs sm:text-sm"
+                    className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white"
                     onClick={() => handleVoiceCommand("repeat")}
                   >
-                    <Play className="mr-1 sm:mr-2 h-3 w-3" />
+                    <Play className="mr-2 h-4 w-4" />
                     Replay
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="flex-1 border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))] hover:bg-[hsl(var(--neon-blue))] hover:text-black text-xs sm:text-sm"
+                    className="flex-1 border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
                     onClick={toggleConversationMode}
                     disabled={!speechRecognitionSupported}
                   >
-                    <Mic className="mr-1 sm:mr-2 h-3 w-3" />
+                    <Mic className="mr-2 h-4 w-4" />
                     Start Chat
                   </Button>
                 </>
@@ -973,135 +825,117 @@ const SmartFixDashboard = () => {
           </div>
 
           {/* Step-by-Step Instructions */}
-          <div className="flex-1 p-3 sm:p-4 overflow-y-auto">
-            <h3 className="font-semibold mb-3 sm:mb-4 text-sm sm:text-base text-[hsl(var(--neon-blue))]">
-              Repair Instructions
-            </h3>
+          <div className="flex-1 p-4 overflow-y-auto">
+            <h3 className="font-semibold mb-4 text-cyan-400">Repair Instructions</h3>
 
             <div className="space-y-3">
-              {repairSteps.length === 0 ? (
-                <Card className="bg-black/30 backdrop-blur-sm border-[hsl(var(--neon-blue))]/20">
-                  <CardContent className="p-3">
-                    <p className="text-gray-400">No repair steps available. Please analyze equipment or start a conversation.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                repairSteps.map((step) => (
-                  <Card
-                    key={step.id}
-                    className={`
-                      bg-black/30 backdrop-blur-sm border-l-4 transition-all duration-300
-                      ${step.status === "completed" ? "border-l-[hsl(var(--success-green))] opacity-75" : ""}
-                      ${step.status === "current" ? "border-l-[hsl(var(--neon-blue))] animate-pulse-neon" : ""}
-                      ${step.status === "pending" ? "border-l-gray-600 opacity-60" : ""}
-                    `}
-                  >
-                    <CardContent className="p-3 sm:p-4">
-                      <div className="flex items-center space-x-2 sm:space-x-3 mb-2">
-                        <div
-                          className={`
-                          w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center
-                          ${step.status === "completed" ? "bg-[hsl(var(--success-green))]" : ""}
-                          ${step.status === "current" ? "bg-[hsl(var(--neon-blue))] animate-pulse" : ""}
-                          ${step.status === "pending" ? "bg-gray-600" : ""}
-                        `}
-                        >
-                          {step.status === "completed" ? (
-                            <Check className="text-black text-xs" />
-                          ) : (
-                            <span
-                              className={`font-bold text-xs ${step.status === "current" ? "text-black" : "text-white"}`}
-                            >
-                              {step.id}
-                            </span>
-                          )}
-                        </div>
-                        <span
-                          className={`
-                          font-semibold text-xs sm:text-sm
-                          ${step.status === "completed" ? "text-[hsl(var(--success-green))]" : ""}
-                          ${step.status === "current" ? "text-[hsl(var(--neon-blue))]" : ""}
-                          ${step.status === "pending" ? "text-gray-400" : ""}
-                        `}
-                        >
-                          Step {step.id}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={`
-                          text-xs
-                          ${step.status === "completed" ? "border-[hsl(var(--success-green))] text-[hsl(var(--success-green))]" : ""}
-                          ${step.status === "current" ? "border-[hsl(var(--neon-blue))] text-[hsl(var(--neon-blue))]" : ""}
-                          ${step.status === "pending" ? "border-gray-500 text-gray-500" : ""}
-                        `}
-                        >
-                          {step.status.toUpperCase()}
-                        </Badge>
-                      </div>
-
-                      <p
+              {repairSteps.map((step) => (
+                <Card
+                  key={step.id}
+                  className={`
+                    bg-black/40 backdrop-blur-sm border-l-4 transition-all duration-300
+                    ${step.status === "completed" ? "border-l-green-400 opacity-75" : ""}
+                    ${step.status === "current" ? "border-l-cyan-400 shadow-lg shadow-cyan-400/25" : ""}
+                    ${step.status === "pending" ? "border-l-gray-600 opacity-60" : ""}
+                  `}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div
                         className={`
-                        text-xs sm:text-sm mb-2 sm:mb-3
-                        ${step.status === "current" ? "text-white font-semibold" : "text-gray-300"}
+                        w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                        ${step.status === "completed" ? "bg-green-400 text-black" : ""}
+                        ${step.status === "current" ? "bg-cyan-400 text-black animate-pulse" : ""}
+                        ${step.status === "pending" ? "bg-gray-600 text-white" : ""}
                       `}
                       >
-                        {step.description}
-                      </p>
+                        {step.status === "completed" ? <Check className="text-black text-xs" /> : step.id}
+                      </div>
+                      <span
+                        className={`
+                        font-semibold text-sm
+                        ${step.status === "completed" ? "text-green-400" : ""}
+                        ${step.status === "current" ? "text-cyan-400" : ""}
+                        ${step.status === "pending" ? "text-gray-400" : ""}
+                      `}
+                      >
+                        Step {step.id}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={`
+                        text-xs
+                        ${step.status === "completed" ? "border-green-400 text-green-400" : ""}
+                        ${step.status === "current" ? "border-cyan-400 text-cyan-400" : ""}
+                        ${step.status === "pending" ? "border-gray-500 text-gray-500" : ""}
+                      `}
+                      >
+                        {step.status.toUpperCase()}
+                      </Badge>
+                    </div>
 
-                      {step.status === "current" && step.subInstructions && (
-                        <div className="text-xs text-gray-400 space-y-1 mb-2 sm:mb-3">
-                          {step.subInstructions.map((instruction, index) => (
-                            <div key={index}>• {instruction}</div>
-                          ))}
-                        </div>
-                      )}
+                    <p
+                      className={`
+                      text-sm mb-3
+                      ${step.status === "current" ? "text-white font-medium" : "text-gray-300"}
+                    `}
+                    >
+                      {step.description}
+                    </p>
 
-                      {step.status === "completed" && (
-                        <div className="text-xs text-[hsl(var(--success-green))]">✓ Confirmed by technician</div>
-                      )}
+                    {step.status === "current" && step.subInstructions && (
+                      <div className="text-xs text-gray-400 space-y-1 mb-3">
+                        {step.subInstructions.map((instruction, index) => (
+                          <div key={index}>• {instruction}</div>
+                        ))}
+                      </div>
+                    )}
 
-                      {step.status === "current" && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            className="bg-[hsl(var(--success-green))] text-black hover:bg-green-400 text-xs"
-                            onClick={() => handleStepComplete(step.id)}
-                          >
-                            Done
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-gray-600 text-gray-300 hover:border-[hsl(var(--neon-blue))] hover:text-[hsl(var(--neon-blue))] text-xs"
-                            onClick={() => handleVoiceCommand("help")}
-                          >
-                            <HelpCircle className="mr-1 h-3 w-3" />
-                            Help
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-gray-600 text-gray-300 hover:border-[hsl(var(--neon-blue))] hover:text-[hsl(var(--neon-blue))] text-xs"
-                          >
-                            <FileText className="mr-1 h-3 w-3" />
-                            Diagram
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
-              )}
+                    {step.status === "completed" && (
+                      <div className="text-xs text-green-400">✓ Confirmed by technician</div>
+                    )}
+
+                    {step.status === "current" && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+                          onClick={() => handleStepComplete(step.id)}
+                        >
+                          <Check className="mr-2 h-3 w-3" />
+                          Done
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:border-cyan-400 hover:text-cyan-400"
+                          onClick={() => handleVoiceCommand("help")}
+                        >
+                          <HelpCircle className="mr-2 h-3 w-3" />
+                          Help
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:border-cyan-400 hover:text-cyan-400"
+                        >
+                          <FileText className="mr-2 h-3 w-3" />
+                          Diagram
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
 
           {/* Session Info */}
-          <div className="p-3 sm:p-4 border-t border-[hsl(var(--neon-blue))]/20 bg-[hsl(var(--secondary-dark))]/50">
-            <div className="flex flex-wrap justify-between text-xs gap-2">
+          <div className="p-4 border-t border-cyan-500/20 bg-slate-900/50">
+            <div className="flex justify-between text-xs gap-4">
               <div className="space-y-1">
                 <div className="text-gray-400">
-                  Session Time:{" "}
-                  <span className="text-[hsl(var(--neon-blue))] font-mono">{formatTime(sessionTime)}</span>
+                  Session Time: <span className="text-cyan-400 font-mono">{formatTime(sessionTime)}</span>
                 </div>
                 <div className="text-gray-400">
                   Technician: <span className="text-white">Alex Rodriguez</span>
@@ -1113,86 +947,82 @@ const SmartFixDashboard = () => {
                 </div>
                 <div className="text-gray-400">
                   Progress:{" "}
-                  <span className="text-[hsl(var(--success-green))]">
+                  <span className="text-green-400">
                     {completedSteps}/{repairSteps.length} Steps
                   </span>
                 </div>
               </div>
             </div>
 
-            <Progress value={progress} className="mt-2 h-2" />
+            <Progress value={progress} className="mt-3 h-2" />
           </div>
         </div>
       </div>
 
       {/* Bottom Controls */}
-      <div className="bg-black/30 backdrop-blur-sm p-3 sm:p-4 border-t border-[hsl(var(--neon-blue))]/20 safe-area-inset">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="sticky bottom-0 bg-black/80 backdrop-blur-xl border-t border-cyan-500/20 p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-2">
           {/* Left Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
-              className="bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))] text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-4 flex-1 sm:flex-none"
+              className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-lg"
               onClick={handleSaveSession}
             >
-              <Save className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
-              <span className="hidden xs:inline">Save Session</span>
-              <span className="xs:hidden">Save</span>
+              <Save className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Save Session</span>
+              <span className="sm:hidden">Save</span>
             </Button>
 
             <Button
               size="sm"
               variant="outline"
-              className="border-gray-600 text-gray-300 hover:border-[hsl(var(--neon-blue))] hover:text-[hsl(var(--neon-blue))] text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-4 flex-1 sm:flex-none"
+              className="border-gray-600 text-gray-300 hover:border-cyan-400 hover:text-cyan-400"
             >
-              <History className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
-              <span className="hidden xs:inline">View History</span>
-              <span className="xs:hidden">History</span>
+              <History className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">History</span>
+              <span className="sm:hidden">History</span>
             </Button>
           </div>
 
           {/* Center Status - Hidden on Mobile */}
-          <div className="hidden lg:flex items-center space-x-6">
+          <div className="hidden md:flex items-center space-x-6">
             <div className="flex items-center space-x-2">
-              <Video className={`h-4 w-4 ${cameraActive ? "text-[hsl(var(--success-green))]" : "text-gray-500"}`} />
+              <Video className={`h-4 w-4 ${cameraActive ? "text-green-400" : "text-gray-500"}`} />
               <span className="text-xs text-gray-400">Video {cameraActive ? "Active" : "Inactive"}</span>
             </div>
             <div className="flex items-center space-x-2">
-              <Mic className={`h-4 w-4 ${micActive ? "text-[hsl(var(--success-green))]" : "text-gray-500"}`} />
+              <Mic className={`h-4 w-4 ${micActive ? "text-green-400" : "text-gray-500"}`} />
               <span className="text-xs text-gray-400">Audio {micActive ? "Active" : "Inactive"}</span>
             </div>
             <div className="flex items-center space-x-2">
-              <Wifi className="h-4 w-4 text-[hsl(var(--success-green))]" />
+              <Wifi className="h-4 w-4 text-green-400" />
               <span className="text-xs text-gray-400">Connected</span>
             </div>
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
-              className="border-gray-600 text-gray-300 hover:border-[hsl(var(--warning-orange))] hover:text-[hsl(var(--warning-orange))] text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-4 flex-1 sm:flex-none"
+              className="border-gray-600 text-gray-300 hover:border-orange-400 hover:text-orange-400"
               onClick={() => setSessionActive(!sessionActive)}
             >
-              {sessionActive ? (
-                <Pause className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
-              ) : (
-                <Play className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
-              )}
-              <span className="hidden xs:inline">{sessionActive ? "Pause" : "Resume"} Session</span>
-              <span className="xs:hidden">{sessionActive ? "Pause" : "Resume"}</span>
+              {sessionActive ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+              <span className="hidden sm:inline">{sessionActive ? "Pause" : "Resume"}</span>
+              <span className="sm:hidden">{sessionActive ? "Pause" : "Resume"}</span>
             </Button>
 
             <Button
               size="sm"
               variant="outline"
-              className="bg-[hsl(var(--warning-orange))]/20 border-[hsl(var(--warning-orange))] text-[hsl(var(--warning-orange))] hover:bg-[hsl(var(--warning-orange))] hover:text-white text-xs sm:text-sm transition-all duration-200 touch-manipulation min-h-[44px] px-4 flex-1 sm:flex-none"
+              className="border-red-500 text-red-400 hover:bg-red-500/10"
               onClick={() => setSessionActive(false)}
             >
-              <OctagonMinus className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
-              <span className="hidden xs:inline">End Session</span>
-              <span className="xs:hidden">End</span>
+              <OctagonMinus className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">End Session</span>
+              <span className="sm:hidden">End</span>
             </Button>
           </div>
         </div>
@@ -1200,5 +1030,3 @@ const SmartFixDashboard = () => {
     </div>
   )
 }
-
-export default SmartFixDashboard
