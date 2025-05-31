@@ -2,13 +2,21 @@ import {
   users, 
   repairSessions, 
   repairSteps,
+  videoCaptures,
+  aiAnalysisLogs,
   type User, 
   type InsertUser,
   type RepairSession,
   type InsertRepairSession,
   type RepairStep,
-  type InsertRepairStep
+  type InsertRepairStep,
+  type VideoCapture,
+  type InsertVideoCapture,
+  type AiAnalysisLog,
+  type InsertAiAnalysisLog
 } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -25,98 +33,122 @@ export interface IStorage {
   createRepairStep(step: InsertRepairStep): Promise<RepairStep>;
   getRepairSteps(sessionId: number): Promise<RepairStep[]>;
   updateRepairStep(id: number, updates: Partial<RepairStep>): Promise<RepairStep | undefined>;
+  
+  // Video Capture methods
+  createVideoCapture(capture: InsertVideoCapture): Promise<VideoCapture>;
+  getVideoCaptures(sessionId: number): Promise<VideoCapture[]>;
+  
+  // AI Analysis methods
+  createAiAnalysisLog(log: InsertAiAnalysisLog): Promise<AiAnalysisLog>;
+  getAiAnalysisLogs(sessionId: number): Promise<AiAnalysisLog[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private repairSessions: Map<number, RepairSession>;
-  private repairSteps: Map<number, RepairStep>;
-  private currentUserId: number;
-  private currentSessionId: number;
-  private currentStepId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.repairSessions = new Map();
-    this.repairSteps = new Map();
-    this.currentUserId = 1;
-    this.currentSessionId = 1;
-    this.currentStepId = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
 
   async createRepairSession(session: InsertRepairSession): Promise<RepairSession> {
-    const id = this.currentSessionId++;
-    const repairSession: RepairSession = {
-      ...session,
-      id,
-      startTime: new Date(),
-      endTime: null,
-    };
-    this.repairSessions.set(id, repairSession);
+    const [repairSession] = await db
+      .insert(repairSessions)
+      .values(session)
+      .returning();
     return repairSession;
   }
 
   async getRepairSession(id: number): Promise<RepairSession | undefined> {
-    return this.repairSessions.get(id);
+    const [session] = await db.select().from(repairSessions).where(eq(repairSessions.id, id));
+    return session || undefined;
   }
 
   async updateRepairSession(id: number, updates: Partial<RepairSession>): Promise<RepairSession | undefined> {
-    const session = this.repairSessions.get(id);
-    if (!session) return undefined;
-    
-    const updatedSession = { ...session, ...updates };
-    this.repairSessions.set(id, updatedSession);
-    return updatedSession;
+    const [session] = await db
+      .update(repairSessions)
+      .set(updates)
+      .where(eq(repairSessions.id, id))
+      .returning();
+    return session || undefined;
   }
 
   async getActiveSession(technicianName: string): Promise<RepairSession | undefined> {
-    return Array.from(this.repairSessions.values()).find(
-      (session) => session.technicianName === technicianName && session.status === "in_progress"
-    );
+    const [session] = await db
+      .select()
+      .from(repairSessions)
+      .where(eq(repairSessions.technicianName, technicianName))
+      .limit(1);
+    return session || undefined;
   }
 
   async createRepairStep(step: InsertRepairStep): Promise<RepairStep> {
-    const id = this.currentStepId++;
-    const repairStep: RepairStep = {
-      ...step,
-      id,
-      completedAt: null,
-    };
-    this.repairSteps.set(id, repairStep);
+    const [repairStep] = await db
+      .insert(repairSteps)
+      .values(step)
+      .returning();
     return repairStep;
   }
 
   async getRepairSteps(sessionId: number): Promise<RepairStep[]> {
-    return Array.from(this.repairSteps.values())
-      .filter((step) => step.sessionId === sessionId)
-      .sort((a, b) => a.stepNumber - b.stepNumber);
+    return await db
+      .select()
+      .from(repairSteps)
+      .where(eq(repairSteps.sessionId, sessionId))
+      .orderBy(repairSteps.stepNumber);
   }
 
   async updateRepairStep(id: number, updates: Partial<RepairStep>): Promise<RepairStep | undefined> {
-    const step = this.repairSteps.get(id);
-    if (!step) return undefined;
-    
-    const updatedStep = { ...step, ...updates };
-    this.repairSteps.set(id, updatedStep);
-    return updatedStep;
+    const [step] = await db
+      .update(repairSteps)
+      .set(updates)
+      .where(eq(repairSteps.id, id))
+      .returning();
+    return step || undefined;
+  }
+
+  async createVideoCapture(capture: InsertVideoCapture): Promise<VideoCapture> {
+    const [videoCapture] = await db
+      .insert(videoCaptures)
+      .values(capture)
+      .returning();
+    return videoCapture;
+  }
+
+  async getVideoCaptures(sessionId: number): Promise<VideoCapture[]> {
+    return await db
+      .select()
+      .from(videoCaptures)
+      .where(eq(videoCaptures.sessionId, sessionId))
+      .orderBy(videoCaptures.capturedAt);
+  }
+
+  async createAiAnalysisLog(log: InsertAiAnalysisLog): Promise<AiAnalysisLog> {
+    const [analysisLog] = await db
+      .insert(aiAnalysisLogs)
+      .values(log)
+      .returning();
+    return analysisLog;
+  }
+
+  async getAiAnalysisLogs(sessionId: number): Promise<AiAnalysisLog[]> {
+    return await db
+      .select()
+      .from(aiAnalysisLogs)
+      .where(eq(aiAnalysisLogs.sessionId, sessionId))
+      .orderBy(aiAnalysisLogs.timestamp);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

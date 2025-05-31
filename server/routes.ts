@@ -1,7 +1,32 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRepairSessionSchema, insertRepairStepSchema } from "@shared/schema";
+import { geminiService } from "./gemini-service";
+import { insertRepairSessionSchema, insertRepairStepSchema, insertVideoCaptureSchema, insertAiAnalysisLogSchema } from "@shared/schema";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: 'uploads/videos/',
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image and video files are allowed'));
+    }
+  }
+});
+
+// Ensure upload directory exists
+const uploadsDir = path.join(process.cwd(), 'uploads/videos');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
