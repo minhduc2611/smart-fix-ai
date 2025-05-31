@@ -16,6 +16,14 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
 
   const startCamera = useCallback(async () => {
     try {
+      // First check if we have permission
+      const permissions = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      
+      if (permissions.state === 'denied') {
+        setError("Camera access was denied. Please enable camera access in your browser settings.");
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -31,9 +39,21 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
         setIsStreaming(true);
         setError(null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error accessing camera:", err);
-      setError("Unable to access camera. Please check permissions.");
+      let errorMessage = "Unable to access camera. ";
+      
+      if (err.name === 'NotAllowedError') {
+        errorMessage += "Please allow camera access in your browser settings.";
+      } else if (err.name === 'NotFoundError') {
+        errorMessage += "No camera found on your device.";
+      } else if (err.name === 'NotReadableError') {
+        errorMessage += "Camera is in use by another application.";
+      } else {
+        errorMessage += "Please check your camera connection and try again.";
+      }
+      
+      setError(errorMessage);
       setIsStreaming(false);
     }
   }, []);
@@ -97,7 +117,11 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
         <div className="text-center p-8">
           <CameraOff className="h-16 w-16 text-gray-500 mx-auto mb-4" />
           <p className="text-red-400 mb-4">{error}</p>
-          <Button onClick={startCamera} variant="outline">
+          <Button 
+            onClick={startCamera} 
+            variant="outline"
+            className="bg-[hsl(var(--neon-blue))] text-black hover:bg-[hsl(var(--electric-blue))]"
+          >
             <Camera className="mr-2 h-4 w-4" />
             Try Again
           </Button>
@@ -114,7 +138,6 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
         playsInline
         muted
         className="w-full h-full object-cover"
-        style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
       />
       
       {/* Hidden canvas for image capture */}
@@ -136,8 +159,8 @@ export function WebcamCapture({ onCapture, className = "" }: WebcamCaptureProps)
       {/* Camera status indicator */}
       {isStreaming && (
         <div className="absolute top-4 left-4 flex items-center space-x-2">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">REC</span>
+          <div className="w-2 h-2 bg-[hsl(var(--success-green))] rounded-full animate-pulse"></div>
+          <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">LIVE</span>
         </div>
       )}
     </div>
