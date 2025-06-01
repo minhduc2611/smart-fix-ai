@@ -61,29 +61,7 @@ export default function SmartFixDashboard() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedEquipment, setDetectedEquipment] =
     useState<DetectedEquipment | null>(null);
-  const [repairSteps, setRepairSteps] = useState<RepairStep[]>([
-    {
-      id: 1,
-      title: "Initial Assessment",
-      description: "Examine the equipment based on your voice input",
-      instructions: `Responding to: - Check the equipment for any visible issues`,
-      status: "current",
-    },
-    {
-      id: 2,
-      title: "Initial Assessment",
-      description: "Examine the equipment based on your voice input",
-      instructions: `Responding to: - Check the equipment for any visible issues`,
-      status: "pending",
-    },
-    {
-      id: 3,
-      title: "Initial Assessment",
-      description: "Examine the equipment based on your voice input",
-      instructions: `Responding to: - Check the equipment for any visible issues`,
-      status: "pending",
-    },
-  ]);
+  const [repairSteps, setRepairSteps] = useState<RepairStep[]>([]);
   const [aiMessage, setAiMessage] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
