@@ -61,7 +61,29 @@ export default function SmartFixDashboard() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedEquipment, setDetectedEquipment] =
     useState<DetectedEquipment | null>(null);
-  const [repairSteps, setRepairSteps] = useState<RepairStep[]>([]);
+  const [repairSteps, setRepairSteps] = useState<RepairStep[]>([
+    {
+      id: 1,
+      title: "Initial Assessment",
+      description: "Examine the equipment based on your voice input",
+      instructions: `Responding to: - Check the equipment for any visible issues`,
+      status: "current",
+    },
+    {
+      id: 2,
+      title: "Initial Assessment",
+      description: "Examine the equipment based on your voice input",
+      instructions: `Responding to: - Check the equipment for any visible issues`,
+      status: "pending",
+    },
+    {
+      id: 3,
+      title: "Initial Assessment",
+      description: "Examine the equipment based on your voice input",
+      instructions: `Responding to: - Check the equipment for any visible issues`,
+      status: "pending",
+    },
+  ]);
   const [aiMessage, setAiMessage] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -429,6 +451,7 @@ export default function SmartFixDashboard() {
   }, [transcript, conversationActive, lastCapturedImage]);
 
   const handleStepComplete = (stepId: number) => {
+    console.log("handleStepComplete", stepId);
     setRepairSteps((prev) =>
       prev.map((step) => {
         if (step.id === stepId) {
@@ -445,7 +468,7 @@ export default function SmartFixDashboard() {
     // Speak next instruction
     const nextStep = repairSteps.find((step) => step.id === stepId + 1);
     if (nextStep && supported) {
-      const message = `Step ${nextStep.id} complete. ${nextStep.description}`;
+      const message = `Step ${stepId} complete. Next step: ${nextStep.description}`;
       setAiMessage(message);
       speak(message);
       setIsSpeaking(true);
