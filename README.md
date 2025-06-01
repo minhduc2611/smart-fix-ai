@@ -1,6 +1,6 @@
-# Smart Fix AI
+# Smart Fix AI 🔧
 
-Smart Fix AI is a modern web application that combines AI-powered analysis with real-time webcam capture capabilities. The project is built with React, TypeScript, and Express, featuring a beautiful UI powered by Tailwind CSS and Radix UI components.
+Smart Fix AI is an innovative web application that integrates AI-powered diagnostics with real-time webcam capture. It leverages vast knowledge bases to assist technicians in troubleshooting and repairs.
 
 ## Features
 
@@ -9,8 +9,8 @@ Smart Fix AI is a modern web application that combines AI-powered analysis with 
 - Modern, responsive UI with dark mode support
 - Offline support with service workers
 - Secure authentication system
-- Real-time updates using WebSocket
-- Database integration with Drizzle ORM
+- Real-time updates
+- Database integration 
 
 ## Tech Stack
 
