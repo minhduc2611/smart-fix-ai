@@ -12,6 +12,9 @@ Smart Fix AI is an innovative web application that integrates AI-powered diagnos
 - Real-time updates
 - Database integration 
 
+## Architecture
+![Smart Fix AI](./client/public/arch.jpg)
+
 ## Tech Stack
 
 - **Frontend:**

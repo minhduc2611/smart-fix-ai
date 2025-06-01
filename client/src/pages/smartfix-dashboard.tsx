@@ -51,7 +51,7 @@ interface RepairStep {
 }
 
 const BASE_URL =
-  process.env.NODE_ENV === "development" ? "http://localhost:5000" : "";
+  process.env.NODE_ENV === "development" ? "http://localhost:3001" : "";
 
 export default function SmartFixDashboard() {
   const [currentStep, setCurrentStep] = useState(1);
